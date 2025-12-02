@@ -41,13 +41,15 @@ spring:
     activate:
       on-profile: prod
   datasource:
-    url: ${DATABASE_URL}
-    username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
+    url: jdbc:postgresql://${PGHOST:localhost}:${PGPORT:5432}/${PGDATABASE:tripmuse}
+    username: ${PGUSER:tripmuse}
+    password: ${PGPASSWORD:tripmuse}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
@@ -57,3 +59,6 @@ storage:
   type: volume
   volume:
     path: /data/media
+
+server:
+  port: ${PORT:8080}
