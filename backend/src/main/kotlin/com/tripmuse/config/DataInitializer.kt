@@ -3,11 +3,14 @@ package com.tripmuse.config
 import com.tripmuse.domain.User
 import com.tripmuse.repository.UserRepository
 import jakarta.persistence.EntityManager
+import org.slf4j.LoggerFactory
 import org.springframework.boot.CommandLineRunner
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
 import org.springframework.transaction.annotation.Transactional
+import java.nio.file.Files
+import java.nio.file.Paths
 
 @Configuration
 @Profile("local")
@@ -42,8 +45,10 @@ class DataInitializer {
 @Configuration
 @Profile("prod")
 class ProdDataInitializer(
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val storageConfig: StorageConfig
 ) {
+    private val logger = LoggerFactory.getLogger(ProdDataInitializer::class.java)
 
     @Bean
     fun initProdData(userRepository: UserRepository): CommandLineRunner {
@@ -55,7 +60,7 @@ class ProdDataInitializer(
                     nickname = "TripMuse User"
                 )
                 userRepository.save(defaultUser)
-                println("Default user created: id=${defaultUser.id}, email=${defaultUser.email}")
+                logger.info("Default user created: id=${defaultUser.id}, email=${defaultUser.email}")
             }
 
             // Fix file paths ending with dot (migration for files without extension)
@@ -65,7 +70,33 @@ class ProdDataInitializer(
 
     @Transactional
     fun fixBrokenFilePaths() {
-        // Fix media file paths using native query
+        val basePath = Paths.get(storageConfig.getBasePath())
+
+        // First, rename actual files on disk
+        listOf("images", "thumbnails").forEach { subDir ->
+            val dirPath = basePath.resolve(subDir)
+            if (Files.exists(dirPath)) {
+                try {
+                    Files.list(dirPath).use { files ->
+                        files.filter { it.fileName.toString().endsWith(".") }
+                            .forEach { file ->
+                                val newName = file.fileName.toString().dropLast(1) + "jpg"
+                                val newPath = file.parent.resolve(newName)
+                                try {
+                                    Files.move(file, newPath)
+                                    logger.info("Renamed file: ${file.fileName} -> $newName")
+                                } catch (e: Exception) {
+                                    logger.warn("Failed to rename file: ${file.fileName}", e)
+                                }
+                            }
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Failed to process directory: $subDir", e)
+                }
+            }
+        }
+
+        // Then fix database paths
         val mediaUpdated = entityManager.createNativeQuery("""
             UPDATE media SET
                 file_path = CONCAT(SUBSTRING(file_path, 1, LENGTH(file_path) - 1), 'jpg')
@@ -86,7 +117,7 @@ class ProdDataInitializer(
         """.trimIndent()).executeUpdate()
 
         if (mediaUpdated > 0 || thumbnailUpdated > 0 || albumUpdated > 0) {
-            println("File path migration completed: $mediaUpdated media paths, $thumbnailUpdated thumbnails, $albumUpdated album covers fixed")
+            logger.info("File path migration completed: $mediaUpdated media paths, $thumbnailUpdated thumbnails, $albumUpdated album covers fixed")
         }
     }
 }
