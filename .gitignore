@@ -1,0 +1,65 @@
+# Build outputs
+build/
+*.class
+*.jar
+*.war
+*.ear
+
+# Gradle
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+
+# Android
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+*.apk
+*.aab
+*.dex
+
+# Kotlin
+*.kotlin_module
+
+# Local environment files
+.env
+.env.local
+*.local.properties
+application-local.yml
+application-local.yaml
+application-local.properties
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Media storage (runtime data)
+media/
+uploads/
+
+# Test outputs
+test-results/
+test-output/
+
+# Coverage
+coverage/
+jacoco/

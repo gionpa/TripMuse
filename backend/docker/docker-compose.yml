@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tripmuse-postgres
+    environment:
+      POSTGRES_DB: tripmuse
+      POSTGRES_USER: tripmuse
+      POSTGRES_PASSWORD: tripmuse
+    ports:
+      - "5432:5432"
+    volumes:
+      - tripmuse-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tripmuse -d tripmuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  tripmuse-data:

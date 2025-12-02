@@ -1,0 +1,182 @@
+package com.tripmuse.data.model
+
+import com.google.gson.annotations.SerializedName
+
+// User
+data class User(
+    val id: Long,
+    val email: String,
+    val nickname: String,
+    val profileImageUrl: String?,
+    val createdAt: String
+)
+
+// Album
+data class Album(
+    val id: Long,
+    val title: String,
+    val location: String?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val startDate: String?,
+    val endDate: String?,
+    val coverImageUrl: String?,
+    val isPublic: Boolean,
+    val mediaCount: Long,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+data class AlbumDetail(
+    val id: Long,
+    val title: String,
+    val location: String?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val startDate: String?,
+    val endDate: String?,
+    val coverImageUrl: String?,
+    val isPublic: Boolean,
+    val mediaCount: Long,
+    val commentCount: Long,
+    val owner: User,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+data class AlbumListResponse(
+    val albums: List<Album>
+)
+
+// Media
+enum class MediaType {
+    IMAGE, VIDEO
+}
+
+data class Media(
+    val id: Long,
+    val type: MediaType,
+    val filePath: String,
+    val fileUrl: String,
+    val thumbnailPath: String?,
+    val thumbnailUrl: String?,
+    val originalFilename: String?,
+    val fileSize: Long?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val takenAt: String?,
+    val isCover: Boolean = false,
+    val createdAt: String
+)
+
+data class MediaDetail(
+    val id: Long,
+    val type: MediaType,
+    val filePath: String,
+    val fileUrl: String,
+    val thumbnailPath: String?,
+    val thumbnailUrl: String?,
+    val originalFilename: String?,
+    val fileSize: Long?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val takenAt: String?,
+    val isCover: Boolean = false,
+    val memo: Memo?,
+    val commentCount: Long,
+    val createdAt: String
+)
+
+data class MediaListResponse(
+    val media: List<Media>
+)
+
+// Memo
+data class Memo(
+    val id: Long,
+    val content: String,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+// Comment
+data class Comment(
+    val id: Long,
+    val content: String,
+    val user: User,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+data class CommentListResponse(
+    val comments: List<Comment>
+)
+
+// Recommendation
+enum class RecommendationType {
+    NEW_TRIP,
+    ADD_TO_EXISTING
+}
+
+data class RecommendationItem(
+    val type: RecommendationType,
+    val location: String?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val startDate: String?,
+    val endDate: String?,
+    val mediaCount: Int,
+    val previewFilenames: List<String>,
+    val targetAlbumId: Long?,
+    val targetAlbumTitle: String?
+)
+
+data class RecommendationResponse(
+    val recommendations: List<RecommendationItem>
+)
+
+// Requests
+data class CreateAlbumRequest(
+    val title: String,
+    val location: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val startDate: String? = null,
+    val endDate: String? = null,
+    val coverImageUrl: String? = null,
+    val isPublic: Boolean = false
+)
+
+data class UpdateAlbumRequest(
+    val title: String,
+    val location: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val startDate: String? = null,
+    val endDate: String? = null,
+    val coverImageUrl: String? = null,
+    val isPublic: Boolean = false
+)
+
+data class UpdateMemoRequest(
+    val content: String
+)
+
+data class CreateCommentRequest(
+    val content: String
+)
+
+data class UpdateCommentRequest(
+    val content: String
+)
+
+data class MediaInfo(
+    val filename: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val takenAt: String? = null
+)
+
+data class AnalyzeMediaRequest(
+    val mediaInfoList: List<MediaInfo>
+)
