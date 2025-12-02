@@ -36,3 +36,23 @@ class DataInitializer {
         }
     }
 }
+
+@Configuration
+@Profile("prod")
+class ProdDataInitializer {
+
+    @Bean
+    fun initProdData(userRepository: UserRepository): CommandLineRunner {
+        return CommandLineRunner {
+            // Create default user if not exists
+            if (!userRepository.existsByEmail("user@tripmuse.com")) {
+                val defaultUser = User(
+                    email = "user@tripmuse.com",
+                    nickname = "TripMuse User"
+                )
+                userRepository.save(defaultUser)
+                println("Default user created: id=${defaultUser.id}, email=${defaultUser.email}")
+            }
+        }
+    }
+}
