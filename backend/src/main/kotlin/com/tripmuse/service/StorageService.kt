@@ -1,13 +1,19 @@
 package com.tripmuse.service
 
+import com.drew.imaging.ImageMetadataReader
+import com.drew.metadata.exif.ExifIFD0Directory
 import com.tripmuse.config.StorageConfig
 import com.tripmuse.exception.StorageException
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
+import java.awt.Color
 import java.awt.Image
+import java.awt.geom.AffineTransform
+import java.awt.image.AffineTransformOp
 import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -69,7 +75,83 @@ class StorageService(
     }
 
     fun storeImage(file: MultipartFile): String {
-        return store(file, "images")
+        if (file.isEmpty) {
+            throw StorageException("Failed to store empty file")
+        }
+
+        val originalFilename = file.originalFilename ?: "unknown"
+        val extension = originalFilename.substringAfterLast(".", "jpg")
+        val filename = "${UUID.randomUUID()}.$extension"
+
+        val targetDir = basePath.resolve("images")
+        Files.createDirectories(targetDir)
+        val targetPath = targetDir.resolve(filename)
+
+        try {
+            val fileBytes = file.bytes
+
+            // Read EXIF orientation
+            val orientation = getExifOrientation(fileBytes)
+
+            // Read image and apply rotation based on EXIF orientation
+            val originalImage = ImageIO.read(ByteArrayInputStream(fileBytes))
+                ?: throw StorageException("Could not read image file")
+
+            val correctedImage = applyExifOrientation(originalImage, orientation)
+
+            // Save the corrected image
+            val formatName = when (extension.lowercase()) {
+                "png" -> "png"
+                "gif" -> "gif"
+                else -> "jpg"
+            }
+            ImageIO.write(correctedImage, formatName, targetPath.toFile())
+
+            logger.info("Image stored with orientation correction: $filename (orientation: $orientation)")
+        } catch (e: IOException) {
+            throw StorageException("Failed to store image: ${e.message}")
+        }
+
+        return "images/$filename"
+    }
+
+    fun storeImageFromBytes(fileBytes: ByteArray, originalFilename: String?): String {
+        if (fileBytes.isEmpty()) {
+            throw StorageException("Failed to store empty file")
+        }
+
+        val filename = originalFilename ?: "unknown"
+        val extension = filename.substringAfterLast(".", "jpg")
+        val storedFilename = "${UUID.randomUUID()}.$extension"
+
+        val targetDir = basePath.resolve("images")
+        Files.createDirectories(targetDir)
+        val targetPath = targetDir.resolve(storedFilename)
+
+        try {
+            // Read EXIF orientation
+            val orientation = getExifOrientation(fileBytes)
+
+            // Read image and apply rotation based on EXIF orientation
+            val originalImage = ImageIO.read(ByteArrayInputStream(fileBytes))
+                ?: throw StorageException("Could not read image file")
+
+            val correctedImage = applyExifOrientation(originalImage, orientation)
+
+            // Save the corrected image
+            val formatName = when (extension.lowercase()) {
+                "png" -> "png"
+                "gif" -> "gif"
+                else -> "jpg"
+            }
+            ImageIO.write(correctedImage, formatName, targetPath.toFile())
+
+            logger.info("Image stored with orientation correction: $storedFilename (orientation: $orientation)")
+        } catch (e: IOException) {
+            throw StorageException("Failed to store image: ${e.message}")
+        }
+
+        return "images/$storedFilename"
     }
 
     fun storeVideo(file: MultipartFile): String {
@@ -141,23 +223,88 @@ class StorageService(
         val originalWidth = original.width
         val originalHeight = original.height
 
-        var targetWidth = maxWidth
-        var targetHeight = maxHeight
-
         val widthRatio = maxWidth.toDouble() / originalWidth
         val heightRatio = maxHeight.toDouble() / originalHeight
         val ratio = minOf(widthRatio, heightRatio)
 
-        targetWidth = (originalWidth * ratio).toInt()
-        targetHeight = (originalHeight * ratio).toInt()
+        val targetWidth = (originalWidth * ratio).toInt()
+        val targetHeight = (originalHeight * ratio).toInt()
 
         val scaledImage = original.getScaledInstance(targetWidth, targetHeight, Image.SCALE_SMOOTH)
 
         val thumbnail = BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB)
         val graphics = thumbnail.createGraphics()
+        graphics.color = Color.WHITE
+        graphics.fillRect(0, 0, targetWidth, targetHeight)
         graphics.drawImage(scaledImage, 0, 0, null)
         graphics.dispose()
 
         return thumbnail
+    }
+
+    private fun getExifOrientation(imageBytes: ByteArray): Int {
+        return try {
+            val metadata = ImageMetadataReader.readMetadata(ByteArrayInputStream(imageBytes))
+            val exifIFD0 = metadata.getFirstDirectoryOfType(ExifIFD0Directory::class.java)
+            exifIFD0?.getInt(ExifIFD0Directory.TAG_ORIENTATION) ?: 1
+        } catch (e: Exception) {
+            logger.debug("Could not read EXIF orientation: ${e.message}")
+            1 // Default: no rotation needed
+        }
+    }
+
+    private fun applyExifOrientation(image: BufferedImage, orientation: Int): BufferedImage {
+        val width = image.width
+        val height = image.height
+
+        val transform = AffineTransform()
+
+        when (orientation) {
+            1 -> return image // Normal - no transformation needed
+            2 -> { // Flip horizontal
+                transform.scale(-1.0, 1.0)
+                transform.translate(-width.toDouble(), 0.0)
+            }
+            3 -> { // Rotate 180
+                transform.translate(width.toDouble(), height.toDouble())
+                transform.rotate(Math.PI)
+            }
+            4 -> { // Flip vertical
+                transform.scale(1.0, -1.0)
+                transform.translate(0.0, -height.toDouble())
+            }
+            5 -> { // Transpose (flip horizontal + rotate 270)
+                transform.rotate(Math.PI / 2)
+                transform.scale(1.0, -1.0)
+            }
+            6 -> { // Rotate 90 CW
+                transform.translate(height.toDouble(), 0.0)
+                transform.rotate(Math.PI / 2)
+            }
+            7 -> { // Transverse (flip horizontal + rotate 90)
+                transform.scale(-1.0, 1.0)
+                transform.translate(-height.toDouble(), 0.0)
+                transform.translate(0.0, width.toDouble())
+                transform.rotate(3 * Math.PI / 2)
+            }
+            8 -> { // Rotate 270 CW (90 CCW)
+                transform.translate(0.0, width.toDouble())
+                transform.rotate(3 * Math.PI / 2)
+            }
+            else -> return image
+        }
+
+        // Determine new dimensions after rotation
+        val newWidth = if (orientation in listOf(5, 6, 7, 8)) height else width
+        val newHeight = if (orientation in listOf(5, 6, 7, 8)) width else height
+
+        val rotatedImage = BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB)
+        val graphics = rotatedImage.createGraphics()
+        graphics.color = Color.WHITE
+        graphics.fillRect(0, 0, newWidth, newHeight)
+        graphics.drawImage(image, transform, null)
+        graphics.dispose()
+
+        return rotatedImage
     }
 }

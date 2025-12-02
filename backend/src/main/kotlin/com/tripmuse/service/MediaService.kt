@@ -12,10 +12,11 @@ import com.tripmuse.exception.BadRequestException
 import com.tripmuse.exception.NotFoundException
 import com.tripmuse.repository.CommentRepository
 import com.tripmuse.repository.MediaRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
-import java.io.InputStream
+import java.io.ByteArrayInputStream
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -27,6 +28,8 @@ class MediaService(
     private val albumService: AlbumService,
     private val storageService: StorageService
 ) {
+    private val logger = LoggerFactory.getLogger(MediaService::class.java)
+
     companion object {
         private val IMAGE_TYPES = setOf("image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif")
         private val VIDEO_TYPES = setOf("video/mp4", "video/quicktime", "video/x-msvideo", "video/webm")
@@ -69,12 +72,15 @@ class MediaService(
             else -> throw BadRequestException("Unsupported file type: $contentType")
         }
 
-        // Extract metadata
-        val metadata = extractMetadata(file.inputStream, mediaType)
+        // Read file bytes once to use for both metadata extraction and storage
+        val fileBytes = file.bytes
 
-        // Store file
+        // Extract metadata from bytes
+        val metadata = extractMetadata(fileBytes, mediaType)
+
+        // Store file using bytes
         val filePath = when (mediaType) {
-            MediaType.IMAGE -> storageService.storeImage(file)
+            MediaType.IMAGE -> storageService.storeImageFromBytes(fileBytes, file.originalFilename)
             MediaType.VIDEO -> storageService.storeVideo(file)
         }
 
@@ -146,13 +152,13 @@ class MediaService(
             .orElseThrow { NotFoundException("Media not found: $mediaId") }
     }
 
-    private fun extractMetadata(inputStream: InputStream, mediaType: MediaType): ExtractedMetadata {
+    private fun extractMetadata(fileBytes: ByteArray, mediaType: MediaType): ExtractedMetadata {
         if (mediaType != MediaType.IMAGE) {
             return ExtractedMetadata()
         }
 
         return try {
-            val metadata = ImageMetadataReader.readMetadata(inputStream)
+            val metadata = ImageMetadataReader.readMetadata(ByteArrayInputStream(fileBytes))
 
             var latitude: Double? = null
             var longitude: Double? = null
