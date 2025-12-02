@@ -55,8 +55,12 @@ class StorageService(
         }
 
         val originalFilename = file.originalFilename ?: "unknown"
-        val extension = originalFilename.substringAfterLast(".", "")
-        val filename = "${UUID.randomUUID()}.$extension"
+        val extension = if (originalFilename.contains(".")) {
+            originalFilename.substringAfterLast(".")
+        } else {
+            "" // No extension for generic store
+        }
+        val filename = if (extension.isNotEmpty()) "${UUID.randomUUID()}.$extension" else "${UUID.randomUUID()}"
 
         val targetDir = basePath.resolve(subDirectory)
         Files.createDirectories(targetDir)
@@ -80,7 +84,11 @@ class StorageService(
         }
 
         val originalFilename = file.originalFilename ?: "unknown"
-        val extension = originalFilename.substringAfterLast(".", "jpg")
+        val extension = if (originalFilename.contains(".")) {
+            originalFilename.substringAfterLast(".")
+        } else {
+            "jpg" // Default extension for images
+        }
         val filename = "${UUID.randomUUID()}.$extension"
 
         val targetDir = basePath.resolve("images")
@@ -121,7 +129,11 @@ class StorageService(
         }
 
         val filename = originalFilename ?: "unknown"
-        val extension = filename.substringAfterLast(".", "jpg")
+        val extension = if (filename.contains(".")) {
+            filename.substringAfterLast(".")
+        } else {
+            "jpg" // Default extension when filename has no extension
+        }
         val storedFilename = "${UUID.randomUUID()}.$extension"
 
         val targetDir = basePath.resolve("images")
@@ -199,7 +211,11 @@ class StorageService(
 
             val thumbnail = createThumbnail(originalImage, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT)
 
-            val extension = sourceFilePath.substringAfterLast(".", "jpg")
+            val extension = if (sourceFilePath.contains(".")) {
+                sourceFilePath.substringAfterLast(".")
+            } else {
+                "jpg" // Default extension for thumbnails
+            }
             val thumbnailFilename = "${UUID.randomUUID()}.${extension}"
             val thumbnailPath = basePath.resolve("thumbnails").resolve(thumbnailFilename)
 
