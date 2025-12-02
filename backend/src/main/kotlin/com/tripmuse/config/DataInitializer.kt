@@ -45,13 +45,15 @@ class DataInitializer {
 @Configuration
 @Profile("prod")
 class ProdDataInitializer(
-    private val entityManager: EntityManager,
     private val storageConfig: StorageConfig
 ) {
     private val logger = LoggerFactory.getLogger(ProdDataInitializer::class.java)
 
     @Bean
-    fun initProdData(userRepository: UserRepository): CommandLineRunner {
+    fun initProdData(
+        userRepository: UserRepository,
+        filePathMigrationService: FilePathMigrationService
+    ): CommandLineRunner {
         return CommandLineRunner {
             // Create default user if not exists
             if (!userRepository.existsByEmail("user@tripmuse.com")) {
@@ -64,9 +66,18 @@ class ProdDataInitializer(
             }
 
             // Fix file paths ending with dot (migration for files without extension)
-            fixBrokenFilePaths()
+            filePathMigrationService.fixBrokenFilePaths()
         }
     }
+}
+
+@org.springframework.stereotype.Service
+@Profile("prod")
+class FilePathMigrationService(
+    private val entityManager: EntityManager,
+    private val storageConfig: StorageConfig
+) {
+    private val logger = LoggerFactory.getLogger(FilePathMigrationService::class.java)
 
     @Transactional
     fun fixBrokenFilePaths() {
