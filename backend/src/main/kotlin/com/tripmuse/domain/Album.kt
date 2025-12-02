@@ -1,10 +1,17 @@
 package com.tripmuse.domain
 
 import jakarta.persistence.*
+import org.hibernate.annotations.Formula
 import java.time.LocalDate
 
 @Entity
-@Table(name = "albums")
+@Table(
+    name = "albums",
+    indexes = [
+        Index(name = "idx_albums_user_id", columnList = "user_id"),
+        Index(name = "idx_albums_created_at", columnList = "created_at DESC")
+    ]
+)
 class Album(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -35,6 +42,9 @@ class Album(
 
     @OneToMany(mappedBy = "album", cascade = [CascadeType.ALL], orphanRemoval = true)
     val mediaList: MutableList<Media> = mutableListOf()
+
+    @Formula("(SELECT COUNT(*) FROM media m WHERE m.album_id = id)")
+    val mediaCount: Long = 0
 
     fun update(
         title: String,

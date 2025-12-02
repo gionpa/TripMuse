@@ -8,7 +8,14 @@ enum class MediaType {
 }
 
 @Entity
-@Table(name = "media")
+@Table(
+    name = "media",
+    indexes = [
+        Index(name = "idx_media_album_id", columnList = "album_id"),
+        Index(name = "idx_media_taken_at", columnList = "taken_at"),
+        Index(name = "idx_media_album_taken", columnList = "album_id, taken_at DESC")
+    ]
+)
 class Media(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "album_id", nullable = false)

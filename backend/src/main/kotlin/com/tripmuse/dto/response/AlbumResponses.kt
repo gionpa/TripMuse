@@ -35,6 +35,24 @@ data class AlbumResponse(
                 updatedAt = album.updatedAt
             )
         }
+
+        // Use @Formula calculated mediaCount from Album entity
+        fun from(album: Album): AlbumResponse {
+            return AlbumResponse(
+                id = album.id,
+                title = album.title,
+                location = album.location,
+                latitude = album.latitude,
+                longitude = album.longitude,
+                startDate = album.startDate,
+                endDate = album.endDate,
+                coverImageUrl = album.coverImageUrl,
+                isPublic = album.isPublic,
+                mediaCount = album.mediaCount,
+                createdAt = album.createdAt,
+                updatedAt = album.updatedAt
+            )
+        }
     }
 }
 
@@ -71,6 +89,26 @@ data class AlbumDetailResponse(
                 coverImageUrl = album.coverImageUrl,
                 isPublic = album.isPublic,
                 mediaCount = mediaCount,
+                commentCount = commentCount,
+                owner = UserResponse.from(album.user),
+                createdAt = album.createdAt,
+                updatedAt = album.updatedAt
+            )
+        }
+
+        // Use @Formula calculated mediaCount from Album entity
+        fun from(album: Album, commentCount: Long): AlbumDetailResponse {
+            return AlbumDetailResponse(
+                id = album.id,
+                title = album.title,
+                location = album.location,
+                latitude = album.latitude,
+                longitude = album.longitude,
+                startDate = album.startDate,
+                endDate = album.endDate,
+                coverImageUrl = album.coverImageUrl,
+                isPublic = album.isPublic,
+                mediaCount = album.mediaCount,
                 commentCount = commentCount,
                 owner = UserResponse.from(album.user),
                 createdAt = album.createdAt,

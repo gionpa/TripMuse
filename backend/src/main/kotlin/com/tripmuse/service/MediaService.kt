@@ -36,17 +36,20 @@ class MediaService(
         // Verify album access
         albumService.getAlbumDetail(albumId, userId)
 
+        // Use Fetch Join to avoid N+1 queries
         val mediaList = if (type != null) {
-            mediaRepository.findByAlbumIdAndTypeOrderByTakenAtDesc(albumId, type)
+            mediaRepository.findByAlbumIdAndTypeWithAlbumOrderByTakenAtDesc(albumId, type)
         } else {
-            mediaRepository.findByAlbumIdOrderByTakenAtDesc(albumId)
+            mediaRepository.findByAlbumIdWithAlbumOrderByTakenAtDesc(albumId)
         }
 
         return MediaListResponse(mediaList.map { MediaResponse.from(it) })
     }
 
     fun getMediaDetail(mediaId: Long, userId: Long): MediaDetailResponse {
-        val media = findMediaById(mediaId)
+        // Use Fetch Join to load album in single query
+        val media = mediaRepository.findByIdWithAlbum(mediaId)
+            ?: throw NotFoundException("Media not found: $mediaId")
 
         // Verify album access
         albumService.getAlbumDetail(media.album.id, userId)

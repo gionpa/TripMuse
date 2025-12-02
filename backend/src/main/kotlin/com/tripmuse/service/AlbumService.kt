@@ -24,10 +24,8 @@ class AlbumService(
 ) {
     fun getAlbumsByUser(userId: Long): AlbumListResponse {
         val albums = albumRepository.findByUserIdOrderByCreatedAtDesc(userId)
-        val albumResponses = albums.map { album ->
-            val mediaCount = mediaRepository.countByAlbumId(album.id)
-            AlbumResponse.from(album, mediaCount)
-        }
+        // Use @Formula calculated mediaCount - no N+1 queries
+        val albumResponses = albums.map { album -> AlbumResponse.from(album) }
         return AlbumListResponse(albumResponses)
     }
 
@@ -39,10 +37,11 @@ class AlbumService(
             throw ForbiddenException("Access denied to this album")
         }
 
-        val mediaCount = mediaRepository.countByAlbumId(albumId)
-        val commentCount = album.mediaList.sumOf { commentRepository.countByMediaId(it.id) }
+        // Use single query for comment count instead of N+1
+        val commentCount = commentRepository.countByAlbumId(albumId)
 
-        return AlbumDetailResponse.from(album, mediaCount, commentCount)
+        // Use @Formula calculated mediaCount
+        return AlbumDetailResponse.from(album, commentCount)
     }
 
     @Transactional
@@ -81,8 +80,8 @@ class AlbumService(
             isPublic = request.isPublic
         )
 
-        val mediaCount = mediaRepository.countByAlbumId(albumId)
-        return AlbumResponse.from(album, mediaCount)
+        // Use @Formula calculated mediaCount
+        return AlbumResponse.from(album)
     }
 
     @Transactional
