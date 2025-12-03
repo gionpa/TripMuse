@@ -165,6 +165,10 @@ data class UpdateAlbumRequest(
     val isPublic: Boolean = false
 )
 
+data class ReorderAlbumsRequest(
+    val albumIds: List<Long>
+)
+
 data class UpdateMemoRequest(
     val content: String
 )

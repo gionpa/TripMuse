@@ -37,7 +37,10 @@ class Album(
     var coverImageUrl: String? = null,
 
     @Column(nullable = false)
-    var isPublic: Boolean = false
+    var isPublic: Boolean = false,
+
+    @Column(nullable = false)
+    var displayOrder: Int = 0
 ) : BaseEntity() {
 
     @OneToMany(mappedBy = "album", cascade = [CascadeType.ALL], orphanRemoval = true)

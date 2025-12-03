@@ -1,6 +1,7 @@
 package com.tripmuse.controller
 
 import com.tripmuse.dto.request.CreateAlbumRequest
+import com.tripmuse.dto.request.ReorderAlbumsRequest
 import com.tripmuse.dto.request.UpdateAlbumRequest
 import com.tripmuse.dto.response.AlbumDetailResponse
 import com.tripmuse.dto.response.AlbumListResponse
@@ -58,6 +59,15 @@ class AlbumController(
         @PathVariable albumId: Long
     ): ResponseEntity<Void> {
         albumService.deleteAlbum(albumId, userId)
+        return ResponseEntity.noContent().build()
+    }
+
+    @PutMapping("/reorder")
+    fun reorderAlbums(
+        @RequestHeader("X-User-Id") userId: Long,
+        @Valid @RequestBody request: ReorderAlbumsRequest
+    ): ResponseEntity<Void> {
+        albumService.reorderAlbums(userId, request.albumIds)
         return ResponseEntity.noContent().build()
     }
 }

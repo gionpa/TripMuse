@@ -35,3 +35,7 @@ data class UpdateAlbumRequest(
     val coverImageUrl: String? = null,
     val isPublic: Boolean = false
 )
+
+data class ReorderAlbumsRequest(
+    val albumIds: List<Long>
+)

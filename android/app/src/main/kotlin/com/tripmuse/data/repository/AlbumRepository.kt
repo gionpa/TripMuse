@@ -90,4 +90,17 @@ class AlbumRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    suspend fun reorderAlbums(albumIds: List<Long>): Result<Unit> {
+        return try {
+            val response = api.reorderAlbums(currentUserId, ReorderAlbumsRequest(albumIds))
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to reorder albums: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

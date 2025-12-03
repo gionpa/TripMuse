@@ -23,7 +23,7 @@ class AlbumService(
     private val userService: UserService
 ) {
     fun getAlbumsByUser(userId: Long): AlbumListResponse {
-        val albums = albumRepository.findByUserIdOrderByCreatedAtDesc(userId)
+        val albums = albumRepository.findByUserIdOrderByDisplayOrderAsc(userId)
         // Use @Formula calculated mediaCount - no N+1 queries
         val albumResponses = albums.map { album -> AlbumResponse.from(album) }
         return AlbumListResponse(albumResponses)
@@ -48,6 +48,9 @@ class AlbumService(
     fun createAlbum(userId: Long, request: CreateAlbumRequest): AlbumResponse {
         val user = userService.findUserById(userId)
 
+        // Set displayOrder to next available order
+        val nextOrder = albumRepository.findMaxDisplayOrderByUserId(userId) + 1
+
         val album = Album(
             user = user,
             title = request.title,
@@ -57,7 +60,8 @@ class AlbumService(
             startDate = request.startDate,
             endDate = request.endDate,
             coverImageUrl = request.coverImageUrl,
-            isPublic = request.isPublic
+            isPublic = request.isPublic,
+            displayOrder = nextOrder
         )
 
         val savedAlbum = albumRepository.save(album)
@@ -107,6 +111,20 @@ class AlbumService(
         val album = findAlbumById(albumId)
         if (album.coverImageUrl == null) {
             album.updateCoverImage(thumbnailUrl)
+        }
+    }
+
+    @Transactional
+    fun reorderAlbums(userId: Long, albumIds: List<Long>) {
+        // Verify all albums belong to the user and get them in one query
+        val albums = albumRepository.findByUserIdOrderByDisplayOrderAsc(userId)
+        val albumMap = albums.associateBy { it.id }
+
+        // Verify all provided IDs are valid
+        albumIds.forEachIndexed { index, albumId ->
+            val album = albumMap[albumId]
+                ?: throw NotFoundException("Album not found or access denied: $albumId")
+            album.displayOrder = index
         }
     }
 }

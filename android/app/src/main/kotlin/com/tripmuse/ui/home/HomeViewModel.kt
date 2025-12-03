@@ -112,6 +112,17 @@ class HomeViewModel @Inject constructor(
                     currentAlbums
                 }
             )
+
+            // Save new order to server
+            viewModelScope.launch {
+                val albumIds = currentAlbums.map { it.id }
+                albumRepository.reorderAlbums(albumIds)
+                    .onFailure { e ->
+                        _uiState.value = _uiState.value.copy(
+                            error = e.message ?: "Failed to save album order"
+                        )
+                    }
+            }
         }
     }
 

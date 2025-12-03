@@ -259,11 +259,11 @@ class StorageService(
             val thumbnailPath = basePath.resolve("thumbnails").resolve(thumbnailFilename)
             Files.createDirectories(thumbnailPath.parent)
 
-            // Use ffmpeg to extract a frame from the video at 1 second
+            // Use ffmpeg to extract the first frame from the video
             val process = ProcessBuilder(
                 "ffmpeg",
                 "-i", sourcePath.toAbsolutePath().toString(),
-                "-ss", "00:00:01",  // Seek to 1 second
+                "-ss", "00:00:00.001",  // Seek to first frame (0.001s to avoid potential issues)
                 "-vframes", "1",     // Extract 1 frame
                 "-vf", "scale=$THUMBNAIL_WIDTH:$THUMBNAIL_HEIGHT:force_original_aspect_ratio=decrease",
                 "-y",                // Overwrite output

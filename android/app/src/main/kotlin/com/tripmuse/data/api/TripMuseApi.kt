@@ -44,6 +44,12 @@ interface TripMuseApi {
         @Path("albumId") albumId: Long
     ): Response<Unit>
 
+    @PUT("albums/reorder")
+    suspend fun reorderAlbums(
+        @Header("X-User-Id") userId: Long,
+        @Body request: ReorderAlbumsRequest
+    ): Response<Unit>
+
     // Media
     @GET("albums/{albumId}/media")
     suspend fun getMediaByAlbum(
