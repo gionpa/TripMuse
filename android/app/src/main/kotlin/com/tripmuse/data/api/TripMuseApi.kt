@@ -66,6 +66,17 @@ interface TripMuseApi {
         @Part file: MultipartBody.Part
     ): Response<Media>
 
+    @Multipart
+    @POST("albums/{albumId}/media")
+    suspend fun uploadMediaWithMetadata(
+        @Header("X-User-Id") userId: Long,
+        @Path("albumId") albumId: Long,
+        @Part file: MultipartBody.Part,
+        @Part latitude: MultipartBody.Part?,
+        @Part longitude: MultipartBody.Part?,
+        @Part takenAt: MultipartBody.Part?
+    ): Response<Media>
+
     @GET("media/{mediaId}")
     suspend fun getMediaDetail(
         @Header("X-User-Id") userId: Long,

@@ -35,9 +35,12 @@ class MediaController(
     fun uploadMedia(
         @RequestHeader("X-User-Id") userId: Long,
         @PathVariable albumId: Long,
-        @RequestParam("file") file: MultipartFile
+        @RequestParam("file") file: MultipartFile,
+        @RequestParam("latitude", required = false) latitude: Double?,
+        @RequestParam("longitude", required = false) longitude: Double?,
+        @RequestParam("takenAt", required = false) takenAt: String?
     ): ResponseEntity<MediaResponse> {
-        val media = mediaService.uploadMedia(albumId, userId, file)
+        val media = mediaService.uploadMedia(albumId, userId, file, latitude, longitude, takenAt)
         return ResponseEntity.status(HttpStatus.CREATED).body(media)
     }
 

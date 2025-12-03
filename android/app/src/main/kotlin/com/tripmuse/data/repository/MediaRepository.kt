@@ -2,14 +2,20 @@ package com.tripmuse.data.repository
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
+import android.util.Log
+import androidx.exifinterface.media.ExifInterface
 import com.tripmuse.data.api.TripMuseApi
 import com.tripmuse.data.model.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -64,12 +70,34 @@ class MediaRepository @Inject constructor(
 
     suspend fun uploadMedia(albumId: Long, uri: Uri): Result<Media> {
         return try {
+            // Extract EXIF metadata before copying file
+            val metadata = extractExifMetadata(uri)
+            Log.d("MediaRepository", "Extracted metadata: lat=${metadata.latitude}, lon=${metadata.longitude}, takenAt=${metadata.takenAt}")
+
             val file = getFileFromUri(uri)
             val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
             val requestBody = file.asRequestBody(mimeType.toMediaTypeOrNull())
             val part = MultipartBody.Part.createFormData("file", file.name, requestBody)
 
-            val response = api.uploadMedia(currentUserId, albumId, part)
+            // Create metadata parts
+            val latitudePart = metadata.latitude?.let {
+                MultipartBody.Part.createFormData("latitude", it.toString())
+            }
+            val longitudePart = metadata.longitude?.let {
+                MultipartBody.Part.createFormData("longitude", it.toString())
+            }
+            val takenAtPart = metadata.takenAt?.let {
+                MultipartBody.Part.createFormData("takenAt", it)
+            }
+
+            val response = api.uploadMediaWithMetadata(
+                currentUserId,
+                albumId,
+                part,
+                latitudePart,
+                longitudePart,
+                takenAtPart
+            )
             file.delete() // Clean up temp file
 
             if (response.isSuccessful && response.body() != null) {
@@ -78,7 +106,64 @@ class MediaRepository @Inject constructor(
                 Result.failure(Exception("Failed to upload media: ${response.code()}"))
             }
         } catch (e: Exception) {
+            Log.e("MediaRepository", "Upload failed", e)
             Result.failure(e)
+        }
+    }
+
+    private data class ExifMetadata(
+        val latitude: Double? = null,
+        val longitude: Double? = null,
+        val takenAt: String? = null
+    )
+
+    private fun extractExifMetadata(uri: Uri): ExifMetadata {
+        return try {
+            // On Android 10+, we need to use setAccessUri to get location data
+            val inputStream = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // For Android 10+, we need MediaStore.setRequireOriginal to get location
+                val originalUri = android.provider.MediaStore.setRequireOriginal(uri)
+                context.contentResolver.openInputStream(originalUri)
+            } else {
+                context.contentResolver.openInputStream(uri)
+            }
+
+            inputStream?.use { stream ->
+                val exifInterface = ExifInterface(stream)
+
+                // Extract GPS coordinates
+                val latLong = exifInterface.latLong
+                val latitude = latLong?.get(0)
+                val longitude = latLong?.get(1)
+
+                Log.d("MediaRepository", "EXIF GPS: lat=$latitude, lon=$longitude")
+
+                // Extract date taken
+                val dateTimeOriginal = exifInterface.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+                    ?: exifInterface.getAttribute(ExifInterface.TAG_DATETIME)
+
+                val takenAt = dateTimeOriginal?.let { parseExifDateTime(it) }
+                Log.d("MediaRepository", "EXIF DateTime: $dateTimeOriginal -> $takenAt")
+
+                ExifMetadata(latitude, longitude, takenAt)
+            } ?: ExifMetadata()
+        } catch (e: Exception) {
+            Log.e("MediaRepository", "Failed to extract EXIF metadata", e)
+            ExifMetadata()
+        }
+    }
+
+    private fun parseExifDateTime(exifDateTime: String): String? {
+        return try {
+            // EXIF format: "yyyy:MM:dd HH:mm:ss"
+            val exifFormat = SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.US)
+            val date = exifFormat.parse(exifDateTime)
+            // Convert to ISO format for backend
+            val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+            date?.let { isoFormat.format(it) }
+        } catch (e: Exception) {
+            Log.e("MediaRepository", "Failed to parse EXIF date: $exifDateTime", e)
+            null
         }
     }
 

@@ -49,12 +49,16 @@ class FileController(
 
         val resource = FileSystemResource(filePath)
         val contentType = determineContentType(requestPath)
+        val lastModified = Files.getLastModifiedTime(filePath).toMillis()
+        val eTag = "\"${filePath.fileName}-${lastModified}\""
 
         logger.info("Serving file: $filePath, contentType: $contentType")
 
         return ResponseEntity.ok()
             .contentType(contentType)
-            .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
+            .header(HttpHeaders.CACHE_CONTROL, "public, max-age=604800, immutable")
+            .header(HttpHeaders.ETAG, eTag)
+            .lastModified(lastModified)
             .body(resource)
     }
 

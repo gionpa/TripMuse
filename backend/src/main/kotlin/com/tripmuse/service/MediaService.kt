@@ -62,7 +62,14 @@ class MediaService(
     }
 
     @Transactional
-    fun uploadMedia(albumId: Long, userId: Long, file: MultipartFile): MediaResponse {
+    fun uploadMedia(
+        albumId: Long,
+        userId: Long,
+        file: MultipartFile,
+        clientLatitude: Double? = null,
+        clientLongitude: Double? = null,
+        clientTakenAt: String? = null
+    ): MediaResponse {
         val album = albumService.findAlbumByIdAndUserId(albumId, userId)
 
         val contentType = file.contentType ?: throw BadRequestException("Unknown file type")
@@ -75,8 +82,17 @@ class MediaService(
         // Read file bytes once to use for both metadata extraction and storage
         val fileBytes = file.bytes
 
-        // Extract metadata from bytes
-        val metadata = extractMetadata(fileBytes, mediaType)
+        // Extract metadata from file bytes
+        val fileMetadata = extractMetadata(fileBytes, mediaType)
+
+        // Use client-provided metadata if available, otherwise use file metadata
+        val finalLatitude = clientLatitude ?: fileMetadata.latitude
+        val finalLongitude = clientLongitude ?: fileMetadata.longitude
+        val finalTakenAt = clientTakenAt?.let { parseClientDateTime(it) } ?: fileMetadata.takenAt
+
+        logger.info("Final metadata - Client: lat=$clientLatitude, lon=$clientLongitude, takenAt=$clientTakenAt")
+        logger.info("Final metadata - File: lat=${fileMetadata.latitude}, lon=${fileMetadata.longitude}, takenAt=${fileMetadata.takenAt}")
+        logger.info("Final metadata - Used: lat=$finalLatitude, lon=$finalLongitude, takenAt=$finalTakenAt")
 
         // Store file using bytes
         val filePath = when (mediaType) {
@@ -97,9 +113,9 @@ class MediaService(
             thumbnailPath = thumbnailPath,
             originalFilename = file.originalFilename,
             fileSize = file.size,
-            latitude = metadata.latitude,
-            longitude = metadata.longitude,
-            takenAt = metadata.takenAt
+            latitude = finalLatitude,
+            longitude = finalLongitude,
+            takenAt = finalTakenAt
         )
 
         album.addMedia(media)
@@ -111,6 +127,15 @@ class MediaService(
         }
 
         return MediaResponse.from(savedMedia)
+    }
+
+    private fun parseClientDateTime(dateTimeString: String): LocalDateTime? {
+        return try {
+            LocalDateTime.parse(dateTimeString)
+        } catch (e: Exception) {
+            logger.warn("Failed to parse client datetime: $dateTimeString", e)
+            null
+        }
     }
 
     @Transactional
@@ -153,11 +178,13 @@ class MediaService(
 
     private fun extractMetadata(fileBytes: ByteArray, mediaType: MediaType): ExtractedMetadata {
         if (mediaType != MediaType.IMAGE) {
+            logger.debug("Skipping metadata extraction for non-image type: $mediaType")
             return ExtractedMetadata()
         }
 
         return try {
             val metadata = ImageMetadataReader.readMetadata(ByteArrayInputStream(fileBytes))
+            logger.debug("EXIF directories found: ${metadata.directories.map { it.name }}")
 
             var latitude: Double? = null
             var longitude: Double? = null
@@ -165,21 +192,28 @@ class MediaService(
 
             // Extract GPS data
             metadata.getFirstDirectoryOfType(GpsDirectory::class.java)?.let { gpsDir ->
+                logger.debug("GPS Directory found with tags: ${gpsDir.tags.map { "${it.tagName}=${it.description}" }}")
                 gpsDir.geoLocation?.let { geo ->
                     latitude = geo.latitude
                     longitude = geo.longitude
+                    logger.info("GPS extracted: lat=$latitude, lon=$longitude")
                 }
+            } ?: run {
+                logger.debug("No GPS Directory found in image")
             }
 
             // Extract date taken
             metadata.getFirstDirectoryOfType(ExifSubIFDDirectory::class.java)?.let { exifDir ->
                 exifDir.getDate(ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL)?.let { date ->
                     takenAt = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
+                    logger.info("Date taken extracted: $takenAt")
                 }
             }
 
+            logger.info("Metadata extraction complete: lat=$latitude, lon=$longitude, takenAt=$takenAt")
             ExtractedMetadata(latitude, longitude, takenAt)
         } catch (e: Exception) {
+            logger.error("Failed to extract metadata: ${e.message}", e)
             ExtractedMetadata()
         }
     }

@@ -25,7 +25,7 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/api/v1/\"")
+            buildConfigField("String", "BASE_URL", "\"https://tripmuse-production.up.railway.app/api/v1/\"")
         }
         release {
             isMinifyEnabled = false
@@ -103,6 +103,9 @@ dependencies {
 
     // Accompanist
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+
+    // ExifInterface for reading photo metadata
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     // Test
     testImplementation("junit:junit:4.13.2")
