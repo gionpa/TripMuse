@@ -8,7 +8,14 @@ data class User(
     val email: String,
     val nickname: String,
     val profileImageUrl: String?,
-    val createdAt: String
+    val createdAt: String,
+    val stats: UserStats? = null
+)
+
+data class UserStats(
+    val albumCount: Long,
+    val imageCount: Long,
+    val videoCount: Long
 )
 
 // Album

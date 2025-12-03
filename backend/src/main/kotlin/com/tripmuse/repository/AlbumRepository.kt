@@ -11,4 +11,6 @@ interface AlbumRepository : JpaRepository<Album, Long> {
     fun findAllPublicAlbums(): List<Album>
 
     fun findByUserIdAndId(userId: Long, albumId: Long): Album?
+
+    fun countByUserId(userId: Long): Long
 }

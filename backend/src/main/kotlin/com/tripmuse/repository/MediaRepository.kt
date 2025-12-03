@@ -19,4 +19,10 @@ interface MediaRepository : JpaRepository<Media, Long> {
 
     @Query("SELECT m FROM Media m JOIN FETCH m.album WHERE m.id = :mediaId")
     fun findByIdWithAlbum(mediaId: Long): Media?
+
+    @Query("SELECT COUNT(m) FROM Media m WHERE m.album.user.id = :userId AND m.type = :type")
+    fun countByUserIdAndType(userId: Long, type: MediaType): Long
+
+    @Query("SELECT COUNT(m) FROM Media m WHERE m.album.user.id = :userId")
+    fun countByUserId(userId: Long): Long
 }

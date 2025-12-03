@@ -9,13 +9,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen() {
-    // Placeholder user data
-    val nickname = "테스트유저"
-    val email = "test@tripmuse.com"
+fun ProfileScreen(
+    viewModel: ProfileViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    val nickname = uiState.user?.nickname ?: "사용자"
+    val email = uiState.user?.email ?: ""
+    val albumCount = uiState.user?.stats?.albumCount ?: 0
+    val imageCount = uiState.user?.stats?.imageCount ?: 0
+    val videoCount = uiState.user?.stats?.videoCount ?: 0
 
     Scaffold(
         topBar = {
@@ -72,9 +79,9 @@ fun ProfileScreen() {
                     .padding(24.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                StatItem(count = "0", label = "앨범")
-                StatItem(count = "0", label = "사진")
-                StatItem(count = "0", label = "동영상")
+                StatItem(count = albumCount.toString(), label = "앨범")
+                StatItem(count = imageCount.toString(), label = "사진")
+                StatItem(count = videoCount.toString(), label = "동영상")
             }
 
             HorizontalDivider()

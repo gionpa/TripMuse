@@ -112,7 +112,20 @@ class MediaRepository @Inject constructor(
         val inputStream = context.contentResolver.openInputStream(uri)
             ?: throw Exception("Cannot open input stream")
 
-        val fileName = "upload_${System.currentTimeMillis()}"
+        // Get file extension from mime type
+        val mimeType = context.contentResolver.getType(uri)
+        val extension = when (mimeType) {
+            "image/jpeg" -> ".jpg"
+            "image/png" -> ".png"
+            "image/gif" -> ".gif"
+            "image/webp" -> ".webp"
+            "video/mp4" -> ".mp4"
+            "video/3gpp" -> ".3gp"
+            "video/quicktime" -> ".mov"
+            else -> ".jpg" // Default to jpg for unknown image types
+        }
+
+        val fileName = "upload_${System.currentTimeMillis()}$extension"
         val file = File(context.cacheDir, fileName)
 
         FileOutputStream(file).use { output ->

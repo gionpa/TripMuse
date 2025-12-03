@@ -4,6 +4,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tripmuse.data.repository.MediaRepository
@@ -27,6 +28,7 @@ data class GalleryItem(
 
 data class GalleryUiState(
     val isLoading: Boolean = false,
+    val hasLoadedOnce: Boolean = false,
     val galleryItems: List<GalleryItem> = emptyList(),
     val selectedItems: Set<String> = emptySet(),
     val isUploading: Boolean = false,
@@ -42,7 +44,21 @@ class GalleryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(GalleryUiState())
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
 
-    fun loadGalleryMedia() {
+    fun loadGalleryMedia(forceReload: Boolean = false) {
+        Log.d("GalleryViewModel", "loadGalleryMedia called, forceReload=$forceReload, isLoading=${_uiState.value.isLoading}, hasLoadedOnce=${_uiState.value.hasLoadedOnce}")
+
+        // Skip if already loading
+        if (_uiState.value.isLoading) {
+            Log.d("GalleryViewModel", "Skipping - already loading")
+            return
+        }
+        // Skip if already loaded once (unless force reload)
+        if (!forceReload && _uiState.value.hasLoadedOnce) {
+            Log.d("GalleryViewModel", "Skipping - already loaded once")
+            return
+        }
+
+        Log.d("GalleryViewModel", "Starting gallery load...")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
@@ -50,23 +66,29 @@ class GalleryViewModel @Inject constructor(
                 val mediaItems = mutableListOf<GalleryItem>()
 
                 // Load images
-                mediaItems.addAll(loadMediaFromUri(
+                val images = loadMediaFromUri(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     isVideo = false
-                ))
+                )
+                Log.d("GalleryViewModel", "Loaded ${images.size} images")
+                mediaItems.addAll(images)
 
                 // Load videos
-                mediaItems.addAll(loadMediaFromUri(
+                val videos = loadMediaFromUri(
                     MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                     isVideo = true
-                ))
+                )
+                Log.d("GalleryViewModel", "Loaded ${videos.size} videos")
+                mediaItems.addAll(videos)
 
                 // Sort by date descending
                 mediaItems.sortedByDescending { it.dateAdded }
             }
 
+            Log.d("GalleryViewModel", "Gallery load complete, total items: ${items.size}")
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
+                hasLoadedOnce = true,
                 galleryItems = items
             )
         }
@@ -142,6 +164,24 @@ class GalleryViewModel @Inject constructor(
                 isUploading = false,
                 selectedItems = emptySet()
             )
+            onComplete()
+        }
+    }
+
+    fun uploadMediaFromUris(albumId: Long, uris: List<Uri>, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isUploading = true)
+
+            for (uri in uris) {
+                mediaRepository.uploadMedia(albumId, uri)
+                    .onFailure { e ->
+                        _uiState.value = _uiState.value.copy(
+                            error = e.message ?: "Upload failed"
+                        )
+                    }
+            }
+
+            _uiState.value = _uiState.value.copy(isUploading = false)
             onComplete()
         }
     }

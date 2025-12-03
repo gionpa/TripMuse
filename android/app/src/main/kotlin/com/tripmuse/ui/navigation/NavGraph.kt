@@ -1,20 +1,26 @@
 package com.tripmuse.ui.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -31,8 +37,10 @@ import com.tripmuse.ui.home.HomeScreen
 import com.tripmuse.ui.media.MediaDetailScreen
 import com.tripmuse.ui.profile.ProfileScreen
 import com.tripmuse.ui.recommendation.RecommendationScreen
+import com.tripmuse.ui.splash.SplashScreen
 
 sealed class Screen(val route: String) {
+    object Splash : Screen("splash")
     object Home : Screen("home")
     object Gallery : Screen("gallery")
     object Recommendation : Screen("recommendation")
@@ -60,8 +68,7 @@ data class BottomNavItem(
 )
 
 val bottomNavItems = listOf(
-    BottomNavItem(Screen.Home, "홈", Icons.Filled.Home, Icons.Outlined.Home),
-    BottomNavItem(Screen.Gallery, "갤러리", Icons.Filled.PhotoLibrary, Icons.Outlined.PhotoLibrary),
+    BottomNavItem(Screen.Home, "앨범", Icons.Filled.Home, Icons.Outlined.Home),
     BottomNavItem(Screen.Recommendation, "추천", Icons.Filled.Lightbulb, Icons.Outlined.Lightbulb),
     BottomNavItem(Screen.Profile, "프로필", Icons.Filled.Person, Icons.Outlined.Person)
 )
@@ -76,10 +83,26 @@ fun TripMuseNavHost() {
         currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
     }
 
+    // Custom colors for bottom navigation
+    val primaryColor = Color(0xFF5B7FFF)  // Modern blue
+    val unselectedColor = Color(0xFF9CA3AF)  // Gray
+    val backgroundColor = Color.White
+    val indicatorColor = Color(0xFFEEF2FF)  // Light blue tint
+
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar {
+                NavigationBar(
+                    modifier = Modifier
+                        .shadow(
+                            elevation = 16.dp,
+                            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                        )
+                        .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                        .height(72.dp),
+                    containerColor = backgroundColor,
+                    tonalElevation = 0.dp
+                ) {
                     bottomNavItems.forEach { item ->
                         val selected = currentDestination?.hierarchy?.any {
                             it.route == item.screen.route
@@ -92,7 +115,13 @@ fun TripMuseNavHost() {
                                     contentDescription = item.label
                                 )
                             },
-                            label = { Text(item.label) },
+                            label = {
+                                Text(
+                                    text = item.label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                            },
                             selected = selected,
                             onClick = {
                                 navController.navigate(item.screen.route) {
@@ -102,7 +131,14 @@ fun TripMuseNavHost() {
                                     launchSingleTop = true
                                     restoreState = true
                                 }
-                            }
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = primaryColor,
+                                selectedTextColor = primaryColor,
+                                unselectedIconColor = unselectedColor,
+                                unselectedTextColor = unselectedColor,
+                                indicatorColor = indicatorColor
+                            )
                         )
                     }
                 }
@@ -111,9 +147,19 @@ fun TripMuseNavHost() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Home.route,
+            startDestination = Screen.Splash.route,
             modifier = Modifier.padding(innerPadding)
         ) {
+            composable(Screen.Splash.route) {
+                SplashScreen(
+                    onSplashFinished = {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Splash.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
             composable(Screen.Home.route) {
                 HomeScreen(
                     onAlbumClick = { albumId ->
@@ -123,10 +169,6 @@ fun TripMuseNavHost() {
                         navController.navigate(Screen.AlbumCreate.route)
                     }
                 )
-            }
-
-            composable(Screen.Gallery.route) {
-                GalleryScreen()
             }
 
             composable(Screen.Recommendation.route) {

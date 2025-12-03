@@ -141,26 +141,37 @@ class StorageService(
         val targetPath = targetDir.resolve(storedFilename)
 
         try {
-            // Read EXIF orientation
-            val orientation = getExifOrientation(fileBytes)
-
-            // Read image and apply rotation based on EXIF orientation
+            // Try to read and process image
             val originalImage = ImageIO.read(ByteArrayInputStream(fileBytes))
-                ?: throw StorageException("Could not read image file")
 
-            val correctedImage = applyExifOrientation(originalImage, orientation)
+            if (originalImage != null) {
+                // Read EXIF orientation
+                val orientation = getExifOrientation(fileBytes)
 
-            // Save the corrected image
-            val formatName = when (extension.lowercase()) {
-                "png" -> "png"
-                "gif" -> "gif"
-                else -> "jpg"
+                val correctedImage = applyExifOrientation(originalImage, orientation)
+
+                // Save the corrected image
+                val formatName = when (extension.lowercase()) {
+                    "png" -> "png"
+                    "gif" -> "gif"
+                    else -> "jpg"
+                }
+                ImageIO.write(correctedImage, formatName, targetPath.toFile())
+
+                logger.info("Image stored with orientation correction: $storedFilename (orientation: $orientation)")
+            } else {
+                // Fallback: save raw bytes if ImageIO cannot read the format
+                Files.write(targetPath, fileBytes)
+                logger.info("Image stored without processing (unsupported format): $storedFilename")
             }
-            ImageIO.write(correctedImage, formatName, targetPath.toFile())
-
-            logger.info("Image stored with orientation correction: $storedFilename (orientation: $orientation)")
-        } catch (e: IOException) {
-            throw StorageException("Failed to store image: ${e.message}")
+        } catch (e: Exception) {
+            // Fallback: save raw bytes on any error
+            try {
+                Files.write(targetPath, fileBytes)
+                logger.warn("Image stored without processing due to error: $storedFilename - ${e.message}")
+            } catch (writeError: IOException) {
+                throw StorageException("Failed to store image: ${writeError.message}")
+            }
         }
 
         return "images/$storedFilename"
@@ -314,10 +325,14 @@ class StorageService(
         val newWidth = if (orientation in listOf(5, 6, 7, 8)) height else width
         val newHeight = if (orientation in listOf(5, 6, 7, 8)) width else height
 
-        val rotatedImage = BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB)
+        // Use ARGB to preserve alpha channel (for PNG images)
+        val imageType = if (image.colorModel.hasAlpha()) BufferedImage.TYPE_INT_ARGB else BufferedImage.TYPE_INT_RGB
+        val rotatedImage = BufferedImage(newWidth, newHeight, imageType)
         val graphics = rotatedImage.createGraphics()
-        graphics.color = Color.WHITE
-        graphics.fillRect(0, 0, newWidth, newHeight)
+        if (!image.colorModel.hasAlpha()) {
+            graphics.color = Color.WHITE
+            graphics.fillRect(0, 0, newWidth, newHeight)
+        }
         graphics.drawImage(image, transform, null)
         graphics.dispose()
 
