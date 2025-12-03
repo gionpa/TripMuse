@@ -3,6 +3,7 @@ package com.tripmuse.data.repository
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
 import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import com.tripmuse.data.api.TripMuseApi
@@ -70,11 +71,45 @@ class MediaRepository @Inject constructor(
 
     suspend fun uploadMedia(albumId: Long, uri: Uri): Result<Media> {
         return try {
-            // Extract EXIF metadata before copying file
-            val metadata = extractExifMetadata(uri)
-            Log.d("MediaRepository", "Extracted metadata: lat=${metadata.latitude}, lon=${metadata.longitude}, takenAt=${metadata.takenAt}")
+            Log.d("MediaRepository", "Starting upload for URI: $uri")
+            Log.d("MediaRepository", "URI scheme: ${uri.scheme}, authority: ${uri.authority}, path: ${uri.path}")
 
+            // Method 1: Try to extract EXIF directly from URI using ParcelFileDescriptor
+            // This preserves GPS data when using ACTION_OPEN_DOCUMENT
+            var metadata = extractExifMetadataFromUri(uri)
+            Log.d("MediaRepository", "EXIF from URI (ParcelFileDescriptor): lat=${metadata.latitude}, lon=${metadata.longitude}, takenAt=${metadata.takenAt}")
+
+            // Copy file to temp location for upload
             val file = getFileFromUri(uri)
+
+            // Method 2: If GPS not found, try from copied file's EXIF (less reliable)
+            if (metadata.latitude == null || metadata.longitude == null) {
+                val fileMetadata = extractExifMetadataFromFile(file)
+                Log.d("MediaRepository", "EXIF from copied file: lat=${fileMetadata.latitude}, lon=${fileMetadata.longitude}")
+                if (fileMetadata.latitude != null && fileMetadata.longitude != null) {
+                    metadata = metadata.copy(
+                        latitude = fileMetadata.latitude,
+                        longitude = fileMetadata.longitude
+                    )
+                }
+            }
+
+            // Method 3: If still not found, try MediaStore (requires ACCESS_MEDIA_LOCATION)
+            if (metadata.latitude == null || metadata.longitude == null) {
+                val mediaStoreLocation = getLocationFromMediaStore(uri)
+                if (mediaStoreLocation != null) {
+                    Log.d("MediaRepository", "MediaStore location found: lat=${mediaStoreLocation.first}, lon=${mediaStoreLocation.second}")
+                    metadata = metadata.copy(
+                        latitude = mediaStoreLocation.first,
+                        longitude = mediaStoreLocation.second
+                    )
+                } else {
+                    Log.d("MediaRepository", "No location found in MediaStore either")
+                }
+            }
+
+            Log.d("MediaRepository", "Final metadata: lat=${metadata.latitude}, lon=${metadata.longitude}, takenAt=${metadata.takenAt}")
+
             val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
             val requestBody = file.asRequestBody(mimeType.toMediaTypeOrNull())
             val part = MultipartBody.Part.createFormData("file", file.name, requestBody)
@@ -117,26 +152,30 @@ class MediaRepository @Inject constructor(
         val takenAt: String? = null
     )
 
-    private fun extractExifMetadata(uri: Uri): ExifMetadata {
+    /**
+     * Extract EXIF metadata directly from URI using ParcelFileDescriptor.
+     * This method preserves GPS data when using ACTION_OPEN_DOCUMENT
+     * because it reads directly from the file descriptor without going through
+     * ContentResolver's metadata stripping.
+     */
+    private fun extractExifMetadataFromUri(uri: Uri): ExifMetadata {
         return try {
-            // On Android 10+, we need to use setAccessUri to get location data
-            val inputStream = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // For Android 10+, we need MediaStore.setRequireOriginal to get location
-                val originalUri = android.provider.MediaStore.setRequireOriginal(uri)
-                context.contentResolver.openInputStream(originalUri)
-            } else {
-                context.contentResolver.openInputStream(uri)
-            }
-
-            inputStream?.use { stream ->
-                val exifInterface = ExifInterface(stream)
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                val exifInterface = ExifInterface(pfd.fileDescriptor)
 
                 // Extract GPS coordinates
                 val latLong = exifInterface.latLong
                 val latitude = latLong?.get(0)
                 val longitude = latLong?.get(1)
 
-                Log.d("MediaRepository", "EXIF GPS: lat=$latitude, lon=$longitude")
+                Log.d("MediaRepository", "EXIF GPS from ParcelFileDescriptor: lat=$latitude, lon=$longitude")
+
+                // Log all GPS-related tags for debugging
+                val gpsLatRef = exifInterface.getAttribute(ExifInterface.TAG_GPS_LATITUDE_REF)
+                val gpsLat = exifInterface.getAttribute(ExifInterface.TAG_GPS_LATITUDE)
+                val gpsLonRef = exifInterface.getAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF)
+                val gpsLon = exifInterface.getAttribute(ExifInterface.TAG_GPS_LONGITUDE)
+                Log.d("MediaRepository", "EXIF GPS raw: latRef=$gpsLatRef, lat=$gpsLat, lonRef=$gpsLonRef, lon=$gpsLon")
 
                 // Extract date taken
                 val dateTimeOriginal = exifInterface.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
@@ -148,7 +187,39 @@ class MediaRepository @Inject constructor(
                 ExifMetadata(latitude, longitude, takenAt)
             } ?: ExifMetadata()
         } catch (e: Exception) {
-            Log.e("MediaRepository", "Failed to extract EXIF metadata", e)
+            Log.e("MediaRepository", "Failed to extract EXIF metadata from URI using ParcelFileDescriptor", e)
+            ExifMetadata()
+        }
+    }
+
+    private fun extractExifMetadataFromFile(file: File): ExifMetadata {
+        return try {
+            val exifInterface = ExifInterface(file.absolutePath)
+
+            // Extract GPS coordinates
+            val latLong = exifInterface.latLong
+            val latitude = latLong?.get(0)
+            val longitude = latLong?.get(1)
+
+            Log.d("MediaRepository", "EXIF GPS from file: lat=$latitude, lon=$longitude")
+
+            // Log all GPS-related tags for debugging
+            val gpsLatRef = exifInterface.getAttribute(ExifInterface.TAG_GPS_LATITUDE_REF)
+            val gpsLat = exifInterface.getAttribute(ExifInterface.TAG_GPS_LATITUDE)
+            val gpsLonRef = exifInterface.getAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF)
+            val gpsLon = exifInterface.getAttribute(ExifInterface.TAG_GPS_LONGITUDE)
+            Log.d("MediaRepository", "EXIF GPS raw: latRef=$gpsLatRef, lat=$gpsLat, lonRef=$gpsLonRef, lon=$gpsLon")
+
+            // Extract date taken
+            val dateTimeOriginal = exifInterface.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+                ?: exifInterface.getAttribute(ExifInterface.TAG_DATETIME)
+
+            val takenAt = dateTimeOriginal?.let { parseExifDateTime(it) }
+            Log.d("MediaRepository", "EXIF DateTime: $dateTimeOriginal -> $takenAt")
+
+            ExifMetadata(latitude, longitude, takenAt)
+        } catch (e: Exception) {
+            Log.e("MediaRepository", "Failed to extract EXIF metadata from file", e)
             ExifMetadata()
         }
     }
@@ -163,6 +234,62 @@ class MediaRepository @Inject constructor(
             date?.let { isoFormat.format(it) }
         } catch (e: Exception) {
             Log.e("MediaRepository", "Failed to parse EXIF date: $exifDateTime", e)
+            null
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getLocationFromMediaStore(uri: Uri): Pair<Double, Double>? {
+        return try {
+            // For Android Q+ (API 29+), we need ACCESS_MEDIA_LOCATION permission
+            // and must use setRequireOriginal() to access location data
+            val actualUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.setRequireOriginal(uri)
+            } else {
+                uri
+            }
+
+            val projection = arrayOf(
+                MediaStore.Images.Media.LATITUDE,
+                MediaStore.Images.Media.LONGITUDE
+            )
+
+            context.contentResolver.query(
+                actualUri,
+                projection,
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val latIndex = cursor.getColumnIndex(MediaStore.Images.Media.LATITUDE)
+                    val lonIndex = cursor.getColumnIndex(MediaStore.Images.Media.LONGITUDE)
+
+                    if (latIndex >= 0 && lonIndex >= 0) {
+                        val latitude = cursor.getDouble(latIndex)
+                        val longitude = cursor.getDouble(lonIndex)
+
+                        Log.d("MediaRepository", "MediaStore query result: lat=$latitude, lon=$longitude")
+
+                        // Check if values are valid (not 0.0)
+                        if (latitude != 0.0 || longitude != 0.0) {
+                            return Pair(latitude, longitude)
+                        }
+                    }
+                }
+            }
+
+            // Try with PhotoPicker's media URI pattern
+            // Photo Picker URIs are in format: content://media/picker/...
+            // We need to find the original media file
+            Log.d("MediaRepository", "URI scheme: ${uri.scheme}, authority: ${uri.authority}, path: ${uri.path}")
+
+            null
+        } catch (e: SecurityException) {
+            Log.e("MediaRepository", "SecurityException accessing location - ACCESS_MEDIA_LOCATION may not be granted", e)
+            null
+        } catch (e: Exception) {
+            Log.e("MediaRepository", "Failed to get location from MediaStore", e)
             null
         }
     }

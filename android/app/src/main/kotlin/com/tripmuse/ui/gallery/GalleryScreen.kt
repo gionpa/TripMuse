@@ -4,7 +4,6 @@ import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -31,11 +30,12 @@ fun GalleryScreen(
         onMediaSelected?.invoke()
     }
 
-    // Photo Picker launcher for multiple selection
-    val multiplePhotoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia()
+    // Use ACTION_OPEN_DOCUMENT instead of Photo Picker to preserve EXIF GPS data
+    // Photo Picker strips GPS metadata for privacy, but ACTION_OPEN_DOCUMENT preserves it
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris: List<Uri> ->
-        Log.d("GalleryScreen", "Photo picker result received: ${uris.size} items")
+        Log.d("GalleryScreen", "Document picker result received: ${uris.size} items")
         pickerResultReceived = true
 
         if (uris.isNotEmpty() && albumId != null) {
@@ -51,14 +51,13 @@ fun GalleryScreen(
         }
     }
 
-    // Launch photo picker immediately when screen appears
+    // Launch document picker immediately when screen appears
     LaunchedEffect(isPickerMode) {
         if (isPickerMode && !pickerLaunched) {
-            Log.d("GalleryScreen", "Launching photo picker for album $albumId")
+            Log.d("GalleryScreen", "Launching document picker for album $albumId")
             pickerLaunched = true
-            multiplePhotoPickerLauncher.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-            )
+            // Allow both images and videos
+            documentPickerLauncher.launch(arrayOf("image/*", "video/*"))
         }
     }
 
