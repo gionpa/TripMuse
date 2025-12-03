@@ -15,6 +15,9 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+# ffmpeg 설치 (동영상 썸네일 생성용)
+RUN apk add --no-cache ffmpeg
+
 RUN mkdir -p /data/media/images /data/media/videos /data/media/thumbnails
 
 COPY --from=builder /app/build/libs/*.jar app.jar

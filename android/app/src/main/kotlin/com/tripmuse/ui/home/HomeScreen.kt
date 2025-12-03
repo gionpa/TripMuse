@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -89,6 +90,11 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .paint(
+                    painter = painterResource(id = R.drawable.bg),
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.3f
+                )
         ) {
             when {
                 uiState.isLoading -> {
@@ -193,7 +199,7 @@ fun DraggableAlbumGrid(
                         }
                     }
                     .shadow(if (isDragging) 8.dp else 0.dp)
-                    .pointerInput(Unit) {
+                    .pointerInput(album.id, index) {
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
                                 draggedItemIndex = index

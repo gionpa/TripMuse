@@ -1,7 +1,9 @@
 package com.tripmuse.ui.navigation
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -10,9 +12,13 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Person
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -74,13 +80,50 @@ val bottomNavItems = listOf(
 )
 
 @Composable
-fun TripMuseNavHost() {
+fun TripMuseNavHost(
+    onExitApp: () -> Unit = {}
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
+    var showExitDialog by remember { mutableStateOf(false) }
+
     val showBottomBar = bottomNavItems.any { item ->
         currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
+    }
+
+    // Handle back press on main screens (bottom nav destinations)
+    val isOnMainScreen = bottomNavItems.any { item ->
+        currentDestination?.route == item.screen.route
+    }
+
+    BackHandler(enabled = isOnMainScreen) {
+        showExitDialog = true
+    }
+
+    // Exit confirmation dialog
+    if (showExitDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitDialog = false },
+            title = { Text("앱 종료") },
+            text = { Text("TripMuse를 종료하시겠습니까?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExitDialog = false
+                        onExitApp()
+                    }
+                ) {
+                    Text("종료")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitDialog = false }) {
+                    Text("취소")
+                }
+            }
+        )
     }
 
     // Custom colors for bottom navigation
@@ -94,6 +137,7 @@ fun TripMuseNavHost() {
             if (showBottomBar) {
                 NavigationBar(
                     modifier = Modifier
+                        .navigationBarsPadding()
                         .shadow(
                             elevation = 16.dp,
                             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)

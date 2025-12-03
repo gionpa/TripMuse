@@ -14,11 +14,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.tripmuse.R
 import com.tripmuse.data.model.Media
 import com.tripmuse.data.model.MediaType
 
@@ -121,6 +124,11 @@ fun AlbumDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .paint(
+                    painter = painterResource(id = R.drawable.bg),
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.3f
+                )
         ) {
             when {
                 uiState.isLoading -> {
@@ -303,14 +311,34 @@ fun MediaThumbnail(
                 onLongClick = { showContextMenu = true }
             )
     ) {
-        AsyncImage(
-            model = media.thumbnailUrl ?: media.fileUrl,
-            contentDescription = media.originalFilename,
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(MaterialTheme.shapes.small),
-            contentScale = ContentScale.Crop
-        )
+        // For videos without thumbnail, show a placeholder instead of trying to load video URL as image
+        if (media.type == MediaType.VIDEO && media.thumbnailUrl == null) {
+            // Video placeholder when no thumbnail is available
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.small),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Videocam,
+                        contentDescription = media.originalFilename,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            AsyncImage(
+                model = media.thumbnailUrl ?: media.fileUrl,
+                contentDescription = media.originalFilename,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.small),
+                contentScale = ContentScale.Crop
+            )
+        }
 
         // Cover indicator
         if (media.isCover) {
