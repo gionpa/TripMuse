@@ -22,6 +22,7 @@ import java.nio.file.StandardCopyOption
 import java.util.UUID
 import javax.imageio.ImageIO
 import jakarta.annotation.PostConstruct
+import java.util.concurrent.TimeUnit
 
 @Service
 @EnableConfigurationProperties(StorageConfig::class)
@@ -242,6 +243,57 @@ class StorageService(
             "thumbnails/$thumbnailFilename"
         } catch (e: Exception) {
             logger.error("Failed to generate thumbnail for: $sourceFilePath", e)
+            null
+        }
+    }
+
+    fun generateVideoThumbnail(sourceFilePath: String): String? {
+        val sourcePath = basePath.resolve(sourceFilePath)
+        if (!Files.exists(sourcePath)) {
+            logger.warn("Source video file does not exist: $sourceFilePath")
+            return null
+        }
+
+        return try {
+            val thumbnailFilename = "${UUID.randomUUID()}.jpg"
+            val thumbnailPath = basePath.resolve("thumbnails").resolve(thumbnailFilename)
+            Files.createDirectories(thumbnailPath.parent)
+
+            // Use ffmpeg to extract a frame from the video at 1 second
+            val process = ProcessBuilder(
+                "ffmpeg",
+                "-i", sourcePath.toAbsolutePath().toString(),
+                "-ss", "00:00:01",  // Seek to 1 second
+                "-vframes", "1",     // Extract 1 frame
+                "-vf", "scale=$THUMBNAIL_WIDTH:$THUMBNAIL_HEIGHT:force_original_aspect_ratio=decrease",
+                "-y",                // Overwrite output
+                thumbnailPath.toAbsolutePath().toString()
+            )
+                .redirectErrorStream(true)
+                .start()
+
+            val completed = process.waitFor(30, TimeUnit.SECONDS)
+            if (!completed) {
+                process.destroyForcibly()
+                logger.warn("FFmpeg timed out for video: $sourceFilePath")
+                return null
+            }
+
+            if (process.exitValue() != 0) {
+                val errorOutput = process.inputStream.bufferedReader().readText()
+                logger.warn("FFmpeg failed for video: $sourceFilePath, exit code: ${process.exitValue()}, output: $errorOutput")
+                return null
+            }
+
+            if (Files.exists(thumbnailPath) && Files.size(thumbnailPath) > 0) {
+                logger.info("Video thumbnail generated: $thumbnailFilename")
+                "thumbnails/$thumbnailFilename"
+            } else {
+                logger.warn("FFmpeg did not create thumbnail for: $sourceFilePath")
+                null
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to generate video thumbnail for: $sourceFilePath", e)
             null
         }
     }

@@ -84,11 +84,10 @@ class MediaService(
             MediaType.VIDEO -> storageService.storeVideo(file)
         }
 
-        // Generate thumbnail for images
-        val thumbnailPath = if (mediaType == MediaType.IMAGE) {
-            storageService.generateImageThumbnail(filePath)
-        } else {
-            null
+        // Generate thumbnail for images and videos
+        val thumbnailPath = when (mediaType) {
+            MediaType.IMAGE -> storageService.generateImageThumbnail(filePath)
+            MediaType.VIDEO -> storageService.generateVideoThumbnail(filePath)
         }
 
         val media = Media(
