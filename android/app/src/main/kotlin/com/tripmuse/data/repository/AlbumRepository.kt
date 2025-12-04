@@ -22,6 +22,8 @@ class AlbumRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch albums: ${response.code()}"))
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -35,6 +37,8 @@ class AlbumRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch album: ${response.code()}"))
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -60,6 +64,8 @@ class AlbumRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to create album: ${response.code()}"))
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -73,6 +79,8 @@ class AlbumRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to update album: ${response.code()}"))
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -86,6 +94,8 @@ class AlbumRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to delete album: ${response.code()}"))
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -99,6 +109,8 @@ class AlbumRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to reorder albums: ${response.code()}"))
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

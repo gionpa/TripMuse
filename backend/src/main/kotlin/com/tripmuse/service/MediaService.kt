@@ -13,6 +13,9 @@ import com.tripmuse.exception.BadRequestException
 import com.tripmuse.exception.NotFoundException
 import com.tripmuse.repository.CommentRepository
 import com.tripmuse.repository.MediaRepository
+import org.springframework.cache.annotation.CacheEvict
+import org.springframework.cache.annotation.Cacheable
+import org.springframework.cache.annotation.Caching
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -40,6 +43,11 @@ class MediaService(
         private val VIDEO_TYPES = setOf("video/mp4", "video/quicktime", "video/x-msvideo", "video/webm", "video/3gpp", "video/3gpp2", "video/mpeg")
     }
 
+    @Cacheable(
+        cacheNames = ["albumMedia"],
+        key = "#userId + ':' + #albumId + ':' + (#type?.name() ?: 'ALL')",
+        unless = "#result.media.isEmpty()"
+    )
     fun getMediaByAlbum(albumId: Long, userId: Long, type: MediaType? = null): MediaListResponse {
         // Verify album access
         albumService.getAlbumDetail(albumId, userId)
@@ -66,6 +74,7 @@ class MediaService(
         return MediaDetailResponse.from(media, commentCount)
     }
 
+    @Caching(evict = [CacheEvict(cacheNames = ["albumMedia"], allEntries = true)])
     @Transactional
     fun uploadMedia(
         albumId: Long,
@@ -175,6 +184,7 @@ class MediaService(
         }
     }
 
+    @CacheEvict(cacheNames = ["albumMedia"], allEntries = true)
     @Transactional
     fun deleteMedia(mediaId: Long, userId: Long) {
         val media = findMediaById(mediaId)
@@ -187,6 +197,7 @@ class MediaService(
         mediaRepository.delete(media)
     }
 
+    @CacheEvict(cacheNames = ["albumMedia"], allEntries = true)
     @Transactional
     fun setCoverImage(mediaId: Long, userId: Long): MediaResponse {
         val media = findMediaById(mediaId)

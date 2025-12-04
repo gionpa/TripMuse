@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -39,6 +40,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.tripmuse.R
 import com.tripmuse.data.model.Album
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -301,6 +304,7 @@ fun AlbumCard(
     isDragging: Boolean = false
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     val elevation by animateDpAsState(
         targetValue = if (isDragging) 8.dp else 2.dp,
@@ -330,8 +334,17 @@ fun AlbumCard(
                     .aspectRatio(1f)
             ) {
                 if (album.coverImageUrl != null) {
+                    val coverRequest = remember(album.coverImageUrl) {
+                        ImageRequest.Builder(context)
+                            .data(album.coverImageUrl)
+                            .crossfade(true)
+                            .size(720, 720) // 요청 크기를 제한해 썸네일 우선 로딩
+                            .diskCachePolicy(CachePolicy.ENABLED)
+                            .memoryCachePolicy(CachePolicy.ENABLED)
+                            .build()
+                    }
                     AsyncImage(
-                        model = album.coverImageUrl,
+                        model = coverRequest,
                         contentDescription = album.title,
                         modifier = Modifier
                             .fillMaxSize()
@@ -386,7 +399,8 @@ fun AlbumCard(
             ) {
                 Text(
                     text = album.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -400,13 +414,13 @@ fun AlbumCard(
                             Icons.Default.LocationOn,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(2.dp))
                         Text(
                             text = album.location,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -420,15 +434,15 @@ fun AlbumCard(
                     if (album.startDate != null) {
                         Text(
                             text = album.startDate,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
                         text = "${album.mediaCount}장",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }

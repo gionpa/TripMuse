@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -26,6 +27,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.tripmuse.R
 import com.tripmuse.data.model.Media
 import com.tripmuse.data.model.MediaType
@@ -315,9 +318,20 @@ fun MediaThumbnail(
     onClick: () -> Unit,
     onSetCover: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     var showContextMenu by remember { mutableStateOf(false) }
     val isProcessing = media.uploadStatus == UploadStatus.PROCESSING
     val isFailed = media.uploadStatus == UploadStatus.FAILED
+    val imageRequest = remember(media.thumbnailUrl, media.fileUrl) {
+        val target = media.thumbnailUrl ?: media.fileUrl
+        ImageRequest.Builder(context)
+            .data(target)
+            .crossfade(true)
+            .size(512, 512) // 작은 썸네일로 요청해 네트워크/디코드 비용 감소
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .build()
+    }
 
     Box(
         modifier = Modifier
@@ -348,7 +362,7 @@ fun MediaThumbnail(
             }
         } else {
             AsyncImage(
-                model = media.thumbnailUrl ?: media.fileUrl,
+                model = imageRequest,
                 contentDescription = media.originalFilename,
                 modifier = Modifier
                     .fillMaxSize()

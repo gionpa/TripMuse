@@ -2,6 +2,8 @@ package com.tripmuse.ui.media
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.location.Geocoder
+import android.os.Build
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -41,6 +43,11 @@ import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.tripmuse.data.model.Comment
 import com.tripmuse.data.model.MediaType
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -500,6 +507,37 @@ fun VideoPlayer(videoUrl: String) {
 
 @Composable
 fun MediaMetadataSection(media: com.tripmuse.data.model.MediaDetail) {
+    val context = LocalContext.current
+    var locationName by remember(media.latitude, media.longitude) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(media.latitude, media.longitude) {
+        val lat = media.latitude
+        val lon = media.longitude
+        if (lat != null && lon != null) {
+            try {
+                if (!Geocoder.isPresent()) {
+                    locationName = null
+                    return@LaunchedEffect
+                }
+                val geocoder = Geocoder(context, Locale.getDefault())
+                val address = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    suspendCancellableCoroutine { cont ->
+                        geocoder.getFromLocation(lat, lon, 1) { result ->
+                            cont.resume(result.firstOrNull())
+                        }
+                    }
+                } else {
+                    withContext(Dispatchers.IO) {
+                        geocoder.getFromLocation(lat, lon, 1)?.firstOrNull()
+                    }
+                }
+                locationName = address.toLocationString()
+            } catch (_: Exception) {
+                locationName = null
+            }
+        }
+    }
+
     Column(
         modifier = Modifier.padding(16.dp)
     ) {
@@ -533,12 +571,24 @@ fun MediaMetadataSection(media: com.tripmuse.data.model.MediaDetail) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "%.4f, %.4f".format(media.latitude, media.longitude),
+                    text = locationName ?: "%.4f, %.4f".format(media.latitude, media.longitude),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
+    }
+}
+
+private fun android.location.Address?.toLocationString(): String? {
+    if (this == null) return null
+    val city = listOfNotNull(locality, subAdminArea, adminArea).distinct().firstOrNull()
+    val country = countryName
+    return when {
+        city != null && country != null && city != country -> "$city, $country"
+        city != null -> city
+        country != null -> country
+        else -> null
     }
 }
 
