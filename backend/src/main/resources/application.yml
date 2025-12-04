@@ -81,6 +81,7 @@ spring:
       # Railway에서 REDIS_HOST/REDIS_URL을 지정하지 않으면 내부 도메인을 기본값으로 사용
       host: ${REDIS_HOST:redis.railway.internal}
       port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:default}
       password: ${REDIS_PASSWORD:}
       url: ${REDIS_URL:}
       ssl:
