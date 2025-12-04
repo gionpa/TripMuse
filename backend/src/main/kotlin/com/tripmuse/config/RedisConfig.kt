@@ -78,12 +78,17 @@ class RedisConfig(
             }
         }
 
-        val host = redisProperties.host.ifBlank { "redis.railway.internal" }
+        val host = redisProperties.host
         val port = if (redisProperties.port > 0) redisProperties.port else 6379
+
+        require(host.isNotBlank()) { "Redis host is empty. Set REDIS_URL or REDIS_HOST." }
 
         return RedisStandaloneConfiguration().apply {
             hostName = host
             this.port = port
+            if (!redisProperties.username.isNullOrBlank()) {
+                username = redisProperties.username
+            }
             if (!redisProperties.password.isNullOrBlank()) {
                 setPassword(redisProperties.password)
             }

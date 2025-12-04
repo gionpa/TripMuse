@@ -82,6 +82,7 @@ spring:
       url: ${REDIS_URL:}
       host: ${REDIS_HOST:redis.railway.internal}
       port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:default}
       password: ${REDIS_PASSWORD:}
       ssl:
         enabled: ${REDIS_SSL:false}
