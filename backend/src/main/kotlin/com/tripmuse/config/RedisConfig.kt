@@ -74,7 +74,7 @@ class RedisConfig(
                 port = if (uri.port > 0) uri.port else 6379
                 uri.userInfo?.split(":", limit = 2)?.let { parts ->
                     if (parts.size == 2) {
-                        username = parts[0]
+                        // Railway는 기본 사용자로 인증, username 지정 없이 패스워드만 설정
                         setPassword(parts[1])
                     } else if (parts.size == 1) {
                         setPassword(parts[0])
@@ -87,9 +87,6 @@ class RedisConfig(
         return RedisStandaloneConfiguration().apply {
             hostName = redisProperties.host
             port = redisProperties.port
-            if (!redisProperties.username.isNullOrBlank()) {
-                username = redisProperties.username
-            }
             if (!redisProperties.password.isNullOrBlank()) {
                 setPassword(redisProperties.password)
             }
