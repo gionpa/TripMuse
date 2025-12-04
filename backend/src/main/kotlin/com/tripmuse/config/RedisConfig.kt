@@ -25,12 +25,13 @@ class RedisConfig(
 
     @Bean
     fun redisConnectionFactory(): RedisConnectionFactory {
-        val standaloneConfig = buildStandaloneConfig(redisProperties)
+        val urlConfig = ParsedRedisUrl.from(redisProperties.url)
+        val standaloneConfig = buildStandaloneConfig(redisProperties, urlConfig)
 
         val clientConfigBuilder = LettuceClientConfiguration.builder()
             .commandTimeout(Duration.ofSeconds(5))
             .shutdownTimeout(Duration.ZERO)
-        if (redisProperties.ssl.isEnabled) {
+        if (redisProperties.ssl.isEnabled || urlConfig?.useSsl == true) {
             clientConfigBuilder.useSsl()
         }
 
@@ -65,23 +66,16 @@ class RedisConfig(
         }
     }
 
-    private fun buildStandaloneConfig(redisProperties: RedisProperties): RedisStandaloneConfiguration {
-        val url = redisProperties.url
-        if (!url.isNullOrBlank()) {
-            val uri = URI(url)
-            val config = RedisStandaloneConfiguration().apply {
-                hostName = uri.host
-                port = if (uri.port > 0) uri.port else 6379
-                uri.userInfo?.split(":", limit = 2)?.let { parts ->
-                    if (parts.size == 2) {
-                        // Railway는 기본 사용자로 인증, username 지정 없이 패스워드만 설정
-                        setPassword(parts[1])
-                    } else if (parts.size == 1) {
-                        setPassword(parts[0])
-                    }
-                }
+    private fun buildStandaloneConfig(
+        redisProperties: RedisProperties,
+        urlConfig: ParsedRedisUrl?
+    ): RedisStandaloneConfiguration {
+        urlConfig?.let { parsed ->
+            return RedisStandaloneConfiguration().apply {
+                hostName = parsed.host
+                port = parsed.port
+                parsed.password?.let { setPassword(it) }
             }
-            return config
         }
 
         return RedisStandaloneConfiguration().apply {
@@ -89,6 +83,34 @@ class RedisConfig(
             port = redisProperties.port
             if (!redisProperties.password.isNullOrBlank()) {
                 setPassword(redisProperties.password)
+            }
+        }
+    }
+
+    private data class ParsedRedisUrl(
+        val host: String,
+        val port: Int,
+        val password: String?,
+        val useSsl: Boolean
+    ) {
+        companion object {
+            fun from(url: String?): ParsedRedisUrl? {
+                if (url.isNullOrBlank()) return null
+                val uri = URI(url)
+                val host = uri.host ?: return null
+                val port = if (uri.port > 0) uri.port else 6379
+                val password = uri.userInfo
+                    ?.split(":", limit = 2)
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { parts ->
+                        when {
+                            parts.size == 2 -> parts[1]
+                            parts.size == 1 -> parts[0]
+                            else -> null
+                        }
+                    }
+                val useSsl = uri.scheme.equals("rediss", ignoreCase = true)
+                return ParsedRedisUrl(host, port, password, useSsl)
             }
         }
     }
