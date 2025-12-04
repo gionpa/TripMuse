@@ -16,6 +16,7 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer
 import org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
 import java.time.Duration
+import java.net.URI
 
 @Configuration
 class RedisConfig(
@@ -24,13 +25,7 @@ class RedisConfig(
 
     @Bean
     fun redisConnectionFactory(): RedisConnectionFactory {
-        val standaloneConfig = RedisStandaloneConfiguration().apply {
-            hostName = redisProperties.host
-            port = redisProperties.port
-            if (!redisProperties.password.isNullOrBlank()) {
-                setPassword(redisProperties.password)
-            }
-        }
+        val standaloneConfig = buildStandaloneConfig(redisProperties)
 
         val clientConfigBuilder = LettuceClientConfiguration.builder()
             .commandTimeout(Duration.ofSeconds(5))
@@ -67,6 +62,37 @@ class RedisConfig(
                     "albumMedia",
                     cacheConfiguration.entryTtl(Duration.ofMinutes(3))
                 )
+        }
+    }
+
+    private fun buildStandaloneConfig(redisProperties: RedisProperties): RedisStandaloneConfiguration {
+        val url = redisProperties.url
+        if (!url.isNullOrBlank()) {
+            val uri = URI(url)
+            val config = RedisStandaloneConfiguration().apply {
+                hostName = uri.host
+                port = if (uri.port > 0) uri.port else 6379
+                uri.userInfo?.split(":", limit = 2)?.let { parts ->
+                    if (parts.size == 2) {
+                        username = parts[0]
+                        setPassword(parts[1])
+                    } else if (parts.size == 1) {
+                        setPassword(parts[0])
+                    }
+                }
+            }
+            return config
+        }
+
+        return RedisStandaloneConfiguration().apply {
+            hostName = redisProperties.host
+            port = redisProperties.port
+            if (!redisProperties.username.isNullOrBlank()) {
+                username = redisProperties.username
+            }
+            if (!redisProperties.password.isNullOrBlank()) {
+                setPassword(redisProperties.password)
+            }
         }
     }
 }
