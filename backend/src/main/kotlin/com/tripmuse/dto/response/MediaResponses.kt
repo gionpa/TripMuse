@@ -2,11 +2,13 @@ package com.tripmuse.dto.response
 
 import com.tripmuse.domain.Media
 import com.tripmuse.domain.MediaType
+import com.tripmuse.domain.UploadStatus
 import java.time.LocalDateTime
 
 data class MediaResponse(
     val id: Long,
     val type: MediaType,
+    val uploadStatus: UploadStatus,
     val filePath: String,
     val fileUrl: String,
     val thumbnailPath: String?,
@@ -24,6 +26,7 @@ data class MediaResponse(
             return MediaResponse(
                 id = media.id,
                 type = media.type,
+                uploadStatus = media.uploadStatus,
                 filePath = media.filePath,
                 fileUrl = "$baseUrl/${media.filePath}",
                 thumbnailPath = media.thumbnailPath,
@@ -47,6 +50,7 @@ data class MediaListResponse(
 data class MediaDetailResponse(
     val id: Long,
     val type: MediaType,
+    val uploadStatus: UploadStatus,
     val filePath: String,
     val fileUrl: String,
     val thumbnailPath: String?,
@@ -66,6 +70,7 @@ data class MediaDetailResponse(
             return MediaDetailResponse(
                 id = media.id,
                 type = media.type,
+                uploadStatus = media.uploadStatus,
                 filePath = media.filePath,
                 fileUrl = "$baseUrl/${media.filePath}",
                 thumbnailPath = media.thumbnailPath,

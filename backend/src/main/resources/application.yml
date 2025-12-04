@@ -7,6 +7,7 @@ spring:
     multipart:
       max-file-size: 100MB
       max-request-size: 100MB
+      file-size-threshold: 0B  # stream uploads directly to disk to avoid OOM
 
 server:
   port: 8080

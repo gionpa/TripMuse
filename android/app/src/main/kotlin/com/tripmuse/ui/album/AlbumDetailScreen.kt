@@ -1,6 +1,7 @@
 package com.tripmuse.ui.album
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -15,15 +16,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.paint
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
 import com.tripmuse.R
 import com.tripmuse.data.model.Media
 import com.tripmuse.data.model.MediaType
+import com.tripmuse.data.model.UploadStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,11 +42,19 @@ fun AlbumDetailScreen(
     viewModel: AlbumViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(albumId) {
         viewModel.loadAlbum(albumId)
+    }
+
+    // 화면으로 복귀 시 앨범/미디어를 최신 상태로 재로딩
+    LaunchedEffect(lifecycleOwner, albumId) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.loadAlbum(albumId)
+        }
     }
 
     // 삭제 확인 다이얼로그
@@ -302,11 +316,14 @@ fun MediaThumbnail(
     onSetCover: () -> Unit = {}
 ) {
     var showContextMenu by remember { mutableStateOf(false) }
+    val isProcessing = media.uploadStatus == UploadStatus.PROCESSING
+    val isFailed = media.uploadStatus == UploadStatus.FAILED
 
     Box(
         modifier = Modifier
             .aspectRatio(1f)
             .combinedClickable(
+                enabled = !isProcessing && !isFailed,
                 onClick = onClick,
                 onLongClick = { showContextMenu = true }
             )
@@ -338,6 +355,39 @@ fun MediaThumbnail(
                     .clip(MaterialTheme.shapes.small),
                 contentScale = ContentScale.Crop
             )
+        }
+
+        if (isProcessing || isFailed) {
+            Surface(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(MaterialTheme.shapes.small),
+                color = Color.Black.copy(alpha = 0.45f)
+            ) {}
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (isProcessing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "업로드 중",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                } else {
+                    Text(
+                        "업로드 실패",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
 
         // Cover indicator

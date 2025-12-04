@@ -1,11 +1,13 @@
 package com.tripmuse.controller
 
 import com.tripmuse.domain.MediaType
+import com.tripmuse.domain.UploadStatus
 import com.tripmuse.dto.response.MediaDetailResponse
 import com.tripmuse.dto.response.MediaListResponse
 import com.tripmuse.dto.response.MediaResponse
 import com.tripmuse.service.MediaService
 import com.tripmuse.service.StorageService
+import org.slf4j.LoggerFactory
 import org.springframework.core.io.ByteArrayResource
 import org.springframework.core.io.Resource
 import org.springframework.http.HttpHeaders
@@ -21,6 +23,7 @@ class MediaController(
     private val mediaService: MediaService,
     private val storageService: StorageService
 ) {
+    private val logger = LoggerFactory.getLogger(MediaController::class.java)
     @GetMapping("/albums/{albumId}/media")
     fun getMediaByAlbum(
         @RequestHeader("X-User-Id") userId: Long,
@@ -40,6 +43,7 @@ class MediaController(
         @RequestParam("longitude", required = false) longitude: Double?,
         @RequestParam("takenAt", required = false) takenAt: String?
     ): ResponseEntity<MediaResponse> {
+        logger.info("UploadMedia request userId=$userId, albumId=$albumId, filename='${file.originalFilename}', contentType=${file.contentType}, size=${file.size}")
         val media = mediaService.uploadMedia(albumId, userId, file, latitude, longitude, takenAt)
         return ResponseEntity.status(HttpStatus.CREATED).body(media)
     }
@@ -77,6 +81,11 @@ class MediaController(
         @PathVariable mediaId: Long
     ): ResponseEntity<Resource> {
         val media = mediaService.getMediaDetail(mediaId, userId)
+
+        if (media.uploadStatus != UploadStatus.COMPLETED) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).build()
+        }
+
         val fileBytes = storageService.getFileBytes(media.filePath)
         val resource = ByteArrayResource(fileBytes)
 

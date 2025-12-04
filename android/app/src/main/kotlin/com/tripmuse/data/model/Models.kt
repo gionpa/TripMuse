@@ -60,9 +60,14 @@ enum class MediaType {
     IMAGE, VIDEO
 }
 
+enum class UploadStatus {
+    PROCESSING, COMPLETED, FAILED
+}
+
 data class Media(
     val id: Long,
     val type: MediaType,
+    val uploadStatus: UploadStatus = UploadStatus.COMPLETED,
     val filePath: String,
     val fileUrl: String,
     val thumbnailPath: String?,
@@ -79,6 +84,7 @@ data class Media(
 data class MediaDetail(
     val id: Long,
     val type: MediaType,
+    val uploadStatus: UploadStatus = UploadStatus.COMPLETED,
     val filePath: String,
     val fileUrl: String,
     val thumbnailPath: String?,

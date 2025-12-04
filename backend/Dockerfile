@@ -1,6 +1,8 @@
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM eclipse-temurin:21-jdk AS builder
 
 WORKDIR /app
+
+ENV GRADLE_OPTS="-Dorg.gradle.vfs.watch=false -Xmx1024m -Dorg.gradle.daemon=false -Dkotlin.compiler.execution.strategy=in-process"
 
 COPY gradlew .
 COPY gradle gradle
@@ -24,6 +26,7 @@ COPY --from=builder /app/build/libs/*.jar app.jar
 
 ENV SPRING_PROFILES_ACTIVE=prod
 ENV SERVER_PORT=8080
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0"
 
 EXPOSE 8080
 

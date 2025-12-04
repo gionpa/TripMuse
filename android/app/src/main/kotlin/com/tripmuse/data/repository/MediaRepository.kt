@@ -9,16 +9,22 @@ import androidx.exifinterface.media.ExifInterface
 import com.tripmuse.data.api.TripMuseApi
 import com.tripmuse.data.model.*
 import dagger.hilt.android.qualifiers.ApplicationContext
+import okio.source
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 @Singleton
 class MediaRepository @Inject constructor(
@@ -27,6 +33,18 @@ class MediaRepository @Inject constructor(
     private val serverBaseUrl: String
 ) {
     private val currentUserId: Long = 1L
+    private val uploadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    fun uploadMediaInBackground(
+        albumId: Long,
+        uri: Uri,
+        onResult: (Result<Media>) -> Unit = {}
+    ) {
+        uploadScope.launch {
+            val result = uploadMedia(albumId, uri)
+            onResult(result)
+        }
+    }
 
     suspend fun getMediaByAlbum(albumId: Long, type: MediaType? = null): Result<List<Media>> {
         return try {
@@ -74,16 +92,19 @@ class MediaRepository @Inject constructor(
             Log.d("MediaRepository", "Starting upload for URI: $uri")
             Log.d("MediaRepository", "URI scheme: ${uri.scheme}, authority: ${uri.authority}, path: ${uri.path}")
 
+            val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+            val isVideo = mimeType.startsWith("video")
+
             // Method 1: Try to extract EXIF directly from URI using ParcelFileDescriptor
             // This preserves GPS data when using ACTION_OPEN_DOCUMENT
             var metadata = extractExifMetadataFromUri(uri)
             Log.d("MediaRepository", "EXIF from URI (ParcelFileDescriptor): lat=${metadata.latitude}, lon=${metadata.longitude}, takenAt=${metadata.takenAt}")
 
-            // Copy file to temp location for upload
-            val file = getFileFromUri(uri)
+            // Copy file to temp location for upload (이미지에만 사용)
+            val file = if (isVideo) null else getFileFromUri(uri)
 
-            // Method 2: If GPS not found, try from copied file's EXIF (less reliable)
-            if (metadata.latitude == null || metadata.longitude == null) {
+            // Method 2: If GPS not found and 이미지인 경우만 파일 EXIF 확인
+            if (!isVideo && file != null && (metadata.latitude == null || metadata.longitude == null)) {
                 val fileMetadata = extractExifMetadataFromFile(file)
                 Log.d("MediaRepository", "EXIF from copied file: lat=${fileMetadata.latitude}, lon=${fileMetadata.longitude}")
                 if (fileMetadata.latitude != null && fileMetadata.longitude != null) {
@@ -95,7 +116,7 @@ class MediaRepository @Inject constructor(
             }
 
             // Method 3: If still not found, try MediaStore (requires ACCESS_MEDIA_LOCATION)
-            if (metadata.latitude == null || metadata.longitude == null) {
+            if (!isVideo && (metadata.latitude == null || metadata.longitude == null)) {
                 val mediaStoreLocation = getLocationFromMediaStore(uri)
                 if (mediaStoreLocation != null) {
                     Log.d("MediaRepository", "MediaStore location found: lat=${mediaStoreLocation.first}, lon=${mediaStoreLocation.second}")
@@ -110,9 +131,18 @@ class MediaRepository @Inject constructor(
 
             Log.d("MediaRepository", "Final metadata: lat=${metadata.latitude}, lon=${metadata.longitude}, takenAt=${metadata.takenAt}")
 
-            val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
-            val requestBody = file.asRequestBody(mimeType.toMediaTypeOrNull())
-            val part = MultipartBody.Part.createFormData("file", file.name, requestBody)
+            val inferredExt = file?.extension?.takeIf { it.isNotBlank() }?.let { ".$it" } ?: ""
+            val fileName = queryDisplayName(uri)
+                ?: "upload_${System.currentTimeMillis()}$inferredExt"
+
+            val requestBody = if (isVideo) {
+                createRequestBodyFromUri(uri, mimeType)
+            } else {
+                (file ?: getFileFromUri(uri)).asRequestBody(mimeType.toMediaTypeOrNull())
+            }
+            Log.d("MediaRepository", "Uploading uri=$uri mimeType=$mimeType fileName=$fileName")
+
+            val part = MultipartBody.Part.createFormData("file", fileName, requestBody)
 
             // Create metadata parts
             val latitudePart = metadata.latitude?.let {
@@ -133,11 +163,13 @@ class MediaRepository @Inject constructor(
                 longitudePart,
                 takenAtPart
             )
-            file.delete() // Clean up temp file
+            file?.delete() // Clean up temp file
 
             if (response.isSuccessful && response.body() != null) {
+                Log.d("MediaRepository", "Upload success code=${response.code()} id=${response.body()!!.id}")
                 Result.success(response.body()!!)
             } else {
+                Log.e("MediaRepository", "Upload failed code=${response.code()} message=${response.errorBody()?.string()}")
                 Result.failure(Exception("Failed to upload media: ${response.code()}"))
             }
         } catch (e: Exception) {
@@ -238,6 +270,31 @@ class MediaRepository @Inject constructor(
         }
     }
 
+    private fun queryDisplayName(uri: Uri): String? {
+        val projection = arrayOf(MediaStore.MediaColumns.DISPLAY_NAME)
+        context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+            val idx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+            if (cursor.moveToFirst()) {
+                return cursor.getString(idx)
+            }
+        }
+        return null
+    }
+
+    private fun createRequestBodyFromUri(uri: Uri, mimeType: String): okhttp3.RequestBody {
+        val resolver = context.contentResolver
+        val length = resolver.openAssetFileDescriptor(uri, "r")?.length ?: -1
+        return object : okhttp3.RequestBody() {
+            override fun contentType() = mimeType.toMediaTypeOrNull()
+            override fun contentLength(): Long = length
+            override fun writeTo(sink: okio.BufferedSink) {
+                resolver.openInputStream(uri)?.use { input ->
+                    sink.writeAll(input.source())
+                } ?: throw IOException("Cannot open input stream for $uri")
+            }
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun getLocationFromMediaStore(uri: Uri): Pair<Double, Double>? {
         return try {
@@ -334,7 +391,15 @@ class MediaRepository @Inject constructor(
             "video/mp4" -> ".mp4"
             "video/3gpp" -> ".3gp"
             "video/quicktime" -> ".mov"
-            else -> ".jpg" // Default to jpg for unknown image types
+            else -> {
+                // Try to infer from URI path
+                val pathExt = uri.lastPathSegment?.substringAfterLast(".", "") ?: ""
+                when (pathExt.lowercase()) {
+                    "mp4", "mov", "avi", "webm", "3gp", "3gpp", "mpeg", "mpg" -> ".$pathExt"
+                    "jpg", "jpeg", "png", "gif", "webp", "heic", "heif" -> ".$pathExt"
+                    else -> ".mp4" // default to mp4 for safety
+                }
+            }
         }
 
         val fileName = "upload_${System.currentTimeMillis()}$extension"

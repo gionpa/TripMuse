@@ -5,6 +5,7 @@ import com.drew.metadata.exif.ExifSubIFDDirectory
 import com.drew.metadata.exif.GpsDirectory
 import com.tripmuse.domain.Media
 import com.tripmuse.domain.MediaType
+import com.tripmuse.domain.UploadStatus
 import com.tripmuse.dto.response.MediaDetailResponse
 import com.tripmuse.dto.response.MediaListResponse
 import com.tripmuse.dto.response.MediaResponse
@@ -15,10 +16,13 @@ import com.tripmuse.repository.MediaRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile
 import java.io.ByteArrayInputStream
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.UUID
 
 @Service
 @Transactional(readOnly = true)
@@ -26,13 +30,14 @@ class MediaService(
     private val mediaRepository: MediaRepository,
     private val commentRepository: CommentRepository,
     private val albumService: AlbumService,
-    private val storageService: StorageService
+    private val storageService: StorageService,
+    private val mediaUploadAsyncService: MediaUploadAsyncService
 ) {
     private val logger = LoggerFactory.getLogger(MediaService::class.java)
 
     companion object {
         private val IMAGE_TYPES = setOf("image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif")
-        private val VIDEO_TYPES = setOf("video/mp4", "video/quicktime", "video/x-msvideo", "video/webm")
+        private val VIDEO_TYPES = setOf("video/mp4", "video/quicktime", "video/x-msvideo", "video/webm", "video/3gpp", "video/3gpp2", "video/mpeg")
     }
 
     fun getMediaByAlbum(albumId: Long, userId: Long, type: MediaType? = null): MediaListResponse {
@@ -72,18 +77,32 @@ class MediaService(
     ): MediaResponse {
         val album = albumService.findAlbumByIdAndUserId(albumId, userId)
 
-        val contentType = file.contentType ?: throw BadRequestException("Unknown file type")
+        val contentType = file.contentType
         val mediaType = when {
-            IMAGE_TYPES.contains(contentType) -> MediaType.IMAGE
-            VIDEO_TYPES.contains(contentType) -> MediaType.VIDEO
-            else -> throw BadRequestException("Unsupported file type: $contentType")
+            contentType != null && IMAGE_TYPES.contains(contentType) -> MediaType.IMAGE
+            contentType != null && (VIDEO_TYPES.contains(contentType) || contentType.startsWith("video")) -> MediaType.VIDEO
+            contentType != null && contentType.startsWith("image") -> MediaType.IMAGE
+            else -> {
+                // Fall back to extension
+                val ext = (file.originalFilename ?: "").substringAfterLast(".", "").lowercase()
+                val typeFromExt = when (ext) {
+                    "jpg", "jpeg", "png", "gif", "webp", "heic", "heif" -> MediaType.IMAGE
+                    "mp4", "mov", "avi", "webm", "3gp", "3gpp", "mpeg", "mpg" -> MediaType.VIDEO
+                    else -> throw BadRequestException("Unsupported file type: ${contentType ?: "unknown"}")
+                }
+                logger.info("Inferred media type from extension '$ext' -> $typeFromExt for filename='${file.originalFilename}'")
+                typeFromExt
+            }
         }
+        logger.info("Upload request albumId=$albumId, userId=$userId, filename='${file.originalFilename}', contentType=$contentType, resolvedType=$mediaType")
 
-        // Read file bytes once to use for both metadata extraction and storage
-        val fileBytes = file.bytes
-
-        // Extract metadata from file bytes
-        val fileMetadata = extractMetadata(fileBytes, mediaType)
+        // Extract metadata (images only) using bytes
+        val fileBytes: ByteArray? = if (mediaType == MediaType.IMAGE) file.bytes else null
+        val fileMetadata = if (mediaType == MediaType.IMAGE && fileBytes != null) {
+            extractMetadata(fileBytes, mediaType)
+        } else {
+            ExtractedMetadata()
+        }
 
         // Use client-provided metadata if available, otherwise use file metadata
         val finalLatitude = clientLatitude ?: fileMetadata.latitude
@@ -94,23 +113,20 @@ class MediaService(
         logger.info("Final metadata - File: lat=${fileMetadata.latitude}, lon=${fileMetadata.longitude}, takenAt=${fileMetadata.takenAt}")
         logger.info("Final metadata - Used: lat=$finalLatitude, lon=$finalLongitude, takenAt=$finalTakenAt")
 
-        // Store file using bytes
-        val filePath = when (mediaType) {
-            MediaType.IMAGE -> storageService.storeImageFromBytes(fileBytes, file.originalFilename)
-            MediaType.VIDEO -> storageService.storeVideo(file)
-        }
+        val filePath = generateRelativePath(mediaType, file.originalFilename)
 
-        // Generate thumbnail for images and videos
-        val thumbnailPath = when (mediaType) {
-            MediaType.IMAGE -> storageService.generateImageThumbnail(filePath)
-            MediaType.VIDEO -> storageService.generateVideoThumbnail(filePath)
+        // For videos, stream directly to disk to avoid OOM
+        var alreadyStored = false
+        if (mediaType == MediaType.VIDEO) {
+            storageService.storeMultipartFileAtPath(file, filePath)
+            alreadyStored = true
         }
 
         val media = Media(
             album = album,
             type = mediaType,
+            uploadStatus = UploadStatus.PROCESSING,
             filePath = filePath,
-            thumbnailPath = thumbnailPath,
             originalFilename = file.originalFilename,
             fileSize = file.size,
             latitude = finalLatitude,
@@ -120,10 +136,31 @@ class MediaService(
 
         album.addMedia(media)
         val savedMedia = mediaRepository.save(media)
+        logger.info("Media saved id=${savedMedia.id}, type=${savedMedia.type}, filePath=${savedMedia.filePath}")
 
-        // Auto-set album cover image if not set
-        if (thumbnailPath != null) {
-            albumService.updateCoverImageIfEmpty(albumId, "/media/files/$thumbnailPath")
+        // 트랜잭션 커밋 후 비동기로 파일 업로드 및 썸네일 생성
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() {
+                    mediaUploadAsyncService.processUploadAsync(
+                        mediaId = savedMedia.id,
+                        albumId = albumId,
+                        mediaType = mediaType,
+                        fileBytes = fileBytes,
+                        originalFilename = file.originalFilename,
+                        alreadyStored = alreadyStored
+                    )
+                }
+            })
+        } else {
+            mediaUploadAsyncService.processUploadAsync(
+                mediaId = savedMedia.id,
+                albumId = albumId,
+                mediaType = mediaType,
+                fileBytes = fileBytes,
+                originalFilename = file.originalFilename,
+                alreadyStored = alreadyStored
+            )
         }
 
         return MediaResponse.from(savedMedia)
@@ -223,4 +260,14 @@ class MediaService(
         val longitude: Double? = null,
         val takenAt: LocalDateTime? = null
     )
+
+    private fun generateRelativePath(mediaType: MediaType, originalFilename: String?): String {
+        val extension = when {
+            originalFilename?.contains(".") == true -> originalFilename.substringAfterLast(".")
+            mediaType == MediaType.IMAGE -> "jpg"
+            else -> "mp4"
+        }
+        val directory = if (mediaType == MediaType.IMAGE) "images" else "videos"
+        return "$directory/${UUID.randomUUID()}.$extension"
+    }
 }

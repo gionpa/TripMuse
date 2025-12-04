@@ -19,6 +19,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import java.util.UUID
 import javax.imageio.ImageIO
 import jakarta.annotation.PostConstruct
@@ -178,12 +179,99 @@ class StorageService(
         return "images/$storedFilename"
     }
 
+    fun storeImageBytesAtPath(fileBytes: ByteArray, relativePath: String) {
+        if (fileBytes.isEmpty()) {
+            throw StorageException("Failed to store empty file")
+        }
+
+        val targetPath = basePath.resolve(relativePath)
+        Files.createDirectories(targetPath.parent)
+
+        val extension = if (relativePath.contains(".")) {
+            relativePath.substringAfterLast(".")
+        } else {
+            "jpg"
+        }
+
+        try {
+            val originalImage = ImageIO.read(ByteArrayInputStream(fileBytes))
+
+            if (originalImage != null) {
+                val orientation = getExifOrientation(fileBytes)
+                val correctedImage = applyExifOrientation(originalImage, orientation)
+
+                val formatName = when (extension.lowercase()) {
+                    "png" -> "png"
+                    "gif" -> "gif"
+                    else -> "jpg"
+                }
+                ImageIO.write(correctedImage, formatName, targetPath.toFile())
+
+                logger.info("Image stored with orientation correction at path: $relativePath")
+            } else {
+                Files.write(
+                    targetPath,
+                    fileBytes,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE
+                )
+                logger.info("Image stored without processing at path: $relativePath (unsupported format)")
+            }
+        } catch (e: Exception) {
+            try {
+                Files.write(
+                    targetPath,
+                    fileBytes,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE
+                )
+                logger.warn("Image stored without processing at path: $relativePath due to error: ${e.message}")
+            } catch (writeError: IOException) {
+                throw StorageException("Failed to store image: ${writeError.message}")
+            }
+        }
+    }
+
     fun storeVideo(file: MultipartFile): String {
         return store(file, "videos")
     }
 
     fun storeThumbnail(file: MultipartFile): String {
         return store(file, "thumbnails")
+    }
+
+    fun storeBytesAt(relativePath: String, data: ByteArray) {
+        val targetPath = basePath.resolve(relativePath)
+        try {
+            Files.createDirectories(targetPath.parent)
+            Files.write(
+                targetPath,
+                data,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE
+            )
+        } catch (e: IOException) {
+            throw StorageException("Failed to store file: ${e.message}")
+        }
+    }
+
+    fun storeMultipartFileAtPath(file: MultipartFile, relativePath: String) {
+        val targetPath = basePath.resolve(relativePath)
+        try {
+            Files.createDirectories(targetPath.parent)
+            file.inputStream.use { input ->
+                Files.copy(
+                    input,
+                    targetPath,
+                    StandardCopyOption.REPLACE_EXISTING
+                )
+            }
+        } catch (e: IOException) {
+            throw StorageException("Failed to store multipart file: ${e.message}")
+        }
     }
 
     fun delete(filePath: String) {

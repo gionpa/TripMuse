@@ -7,6 +7,10 @@ enum class MediaType {
     IMAGE, VIDEO
 }
 
+enum class UploadStatus {
+    PROCESSING, COMPLETED, FAILED
+}
+
 @Entity
 @Table(
     name = "media",
@@ -24,6 +28,10 @@ class Media(
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     val type: MediaType,
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20) default 'COMPLETED'")
+    var uploadStatus: UploadStatus = UploadStatus.PROCESSING,
 
     @Column(nullable = false, length = 500)
     val filePath: String,
@@ -60,5 +68,14 @@ class Media(
 
     fun setAsCover(isCover: Boolean) {
         this.isCover = isCover
+    }
+
+    fun markUploadCompleted(thumbnailPath: String?) {
+        this.uploadStatus = UploadStatus.COMPLETED
+        thumbnailPath?.let { this.thumbnailPath = it }
+    }
+
+    fun markUploadFailed() {
+        this.uploadStatus = UploadStatus.FAILED
     }
 }

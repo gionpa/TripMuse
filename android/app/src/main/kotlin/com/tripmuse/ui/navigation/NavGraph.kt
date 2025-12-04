@@ -15,6 +15,8 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +37,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.tripmuse.ui.album.AlbumViewModel
 import com.tripmuse.ui.album.AlbumCreateScreen
 import com.tripmuse.ui.album.AlbumDetailScreen
 import com.tripmuse.ui.album.AlbumEditScreen
@@ -232,6 +236,19 @@ fun TripMuseNavHost(
                 arguments = listOf(navArgument("albumId") { type = NavType.LongType })
             ) { backStackEntry ->
                 val albumId = backStackEntry.arguments?.getLong("albumId") ?: return@composable
+                val albumViewModel: AlbumViewModel = hiltViewModel(backStackEntry)
+
+                // 갤러리에서 돌아올 때 refresh 플래그가 있으면 다시 불러오기
+                val refreshKey = backStackEntry.savedStateHandle
+                    .getStateFlow("refreshAlbumKey", 0L)
+                    .collectAsState(initial = 0L)
+                LaunchedEffect(refreshKey.value) {
+                    if (refreshKey.value > 0L) {
+                        albumViewModel.resetFilter()
+                        albumViewModel.loadAlbum(albumId)
+                    }
+                }
+
                 AlbumDetailScreen(
                     albumId = albumId,
                     onBackClick = { navController.popBackStack() },
@@ -243,7 +260,8 @@ fun TripMuseNavHost(
                     },
                     onEditAlbumClick = { id ->
                         navController.navigate(Screen.AlbumEdit.createRoute(id))
-                    }
+                    },
+                    viewModel = albumViewModel
                 )
             }
 
@@ -285,11 +303,19 @@ fun TripMuseNavHost(
                 arguments = listOf(navArgument("albumId") { type = NavType.LongType })
             ) { backStackEntry ->
                 val albumId = backStackEntry.arguments?.getLong("albumId") ?: return@composable
+                // 앨범 화면의 ViewModel을 직접 참조해 업로드 성공 시 즉시 새로고침
+                val parentEntry = navController.previousBackStackEntry
+                val parentAlbumViewModel: AlbumViewModel? = parentEntry?.let { hiltViewModel(it) }
+
                 GalleryScreen(
                     isPickerMode = true,
                     albumId = albumId,
                     onMediaSelected = {
                         navController.popBackStack()
+                    },
+                    onUploadSuccess = {
+                        parentAlbumViewModel?.resetFilter()
+                        parentAlbumViewModel?.loadAlbum(albumId)
                     }
                 )
             }

@@ -18,11 +18,13 @@ fun GalleryScreen(
     isPickerMode: Boolean = false,
     albumId: Long? = null,
     onMediaSelected: (() -> Unit)? = null,
+    onUploadSuccess: (() -> Unit)? = null,
     viewModel: GalleryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var pickerLaunched by remember { mutableStateOf(false) }
     var pickerResultReceived by remember { mutableStateOf(false) }
+    var hasNavigatedBackAfterUpload by remember { mutableStateOf(false) }
 
     // Handle back press - return to album detail
     BackHandler(enabled = isPickerMode) {
@@ -40,10 +42,20 @@ fun GalleryScreen(
 
         if (uris.isNotEmpty() && albumId != null) {
             Log.d("GalleryScreen", "Uploading ${uris.size} items to album $albumId")
-            viewModel.uploadMediaFromUris(albumId, uris) {
-                Log.d("GalleryScreen", "Upload complete, calling onMediaSelected")
-                onMediaSelected?.invoke()
-            }
+            viewModel.uploadMediaFromUris(
+                albumId = albumId,
+                uris = uris,
+                onComplete = {
+                    // no-op; 실제 완료 시점에만 뒤로 가기
+                },
+                onUploadSuccess = {
+                    if (!hasNavigatedBackAfterUpload) {
+                        hasNavigatedBackAfterUpload = true
+                        onUploadSuccess?.invoke()
+                        onMediaSelected?.invoke()
+                    }
+                }
+            )
         } else {
             // User cancelled without selection or empty result
             Log.d("GalleryScreen", "No items selected, calling onMediaSelected to go back")
