@@ -1,6 +1,8 @@
 package com.tripmuse.config
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import org.springframework.boot.autoconfigure.cache.RedisCacheManagerBuilderCustomizer
 import org.springframework.boot.autoconfigure.data.redis.RedisProperties
@@ -33,7 +35,7 @@ class RedisConfig(
         val clientConfigBuilder = LettuceClientConfiguration.builder()
             .commandTimeout(Duration.ofSeconds(5))
             .shutdownTimeout(Duration.ZERO)
-        if (redisProperties.isSsl) {
+        if (redisProperties.ssl.isEnabled) {
             clientConfigBuilder.useSsl()
         }
 
@@ -43,6 +45,10 @@ class RedisConfig(
     @Bean
     fun cacheConfiguration(objectMapper: ObjectMapper): RedisCacheConfiguration {
         val mapper = objectMapper.copy().registerKotlinModule()
+        val ptv = BasicPolymorphicTypeValidator.builder()
+            .allowIfSubType(Any::class.java)
+            .build()
+        mapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.EVERYTHING, JsonTypeInfo.As.PROPERTY)
         val serializer = GenericJackson2JsonRedisSerializer(mapper)
 
         return RedisCacheConfiguration.defaultCacheConfig()
