@@ -80,7 +80,7 @@ spring:
     redis:
       # Railway에서는 REDIS_URL을 우선 사용하고, 없을 때만 host/port를 참조
       url: ${REDIS_URL:}
-      host: ${REDIS_HOST:}
+      host: ${REDIS_HOST:redis.railway.internal}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       ssl:
