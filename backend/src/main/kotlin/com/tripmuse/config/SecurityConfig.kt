@@ -32,6 +32,7 @@ class SecurityConfig(
                     "/",
                     "/actuator/**",
                     "/api/v1/auth/**",
+                    "/api/v1/health",
                     "/media/files/**"
                 ).permitAll()
                     .anyRequest().authenticated()
