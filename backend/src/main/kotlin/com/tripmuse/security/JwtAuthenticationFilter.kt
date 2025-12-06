@@ -21,20 +21,35 @@ class JwtAuthenticationFilter(
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
+        // 1. JWT 토큰으로 인증 시도
         val token = resolveToken(request)
         if (token != null && jwtTokenProvider.validateToken(token)) {
             val userId = jwtTokenProvider.getUserId(token)
-            val userDetails = customUserDetailsService.loadUserById(userId)
-            val authentication = UsernamePasswordAuthenticationToken(
-                userDetails,
-                null,
-                userDetails.authorities
-            ).apply {
-                details = WebAuthenticationDetailsSource().buildDetails(request)
+            authenticateUser(userId, request)
+        } else {
+            // 2. X-User-Id 헤더로 폴백 인증 (기존 앱 호환)
+            val xUserId = request.getHeader("X-User-Id")?.toLongOrNull()
+            if (xUserId != null) {
+                try {
+                    authenticateUser(xUserId, request)
+                } catch (_: Exception) {
+                    // 유저가 없으면 무시하고 진행
+                }
             }
-            SecurityContextHolder.getContext().authentication = authentication
         }
         filterChain.doFilter(request, response)
+    }
+
+    private fun authenticateUser(userId: Long, request: HttpServletRequest) {
+        val userDetails = customUserDetailsService.loadUserById(userId)
+        val authentication = UsernamePasswordAuthenticationToken(
+            userDetails,
+            null,
+            userDetails.authorities
+        ).apply {
+            details = WebAuthenticationDetailsSource().buildDetails(request)
+        }
+        SecurityContextHolder.getContext().authentication = authentication
     }
 
     private fun resolveToken(request: HttpServletRequest): String? {
