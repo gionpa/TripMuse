@@ -8,10 +8,6 @@ spring:
       max-file-size: 100MB
       max-request-size: 100MB
       file-size-threshold: 0B  # stream uploads directly to disk to avoid OOM
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
   cache:
     type: none
 
@@ -73,6 +69,9 @@ spring:
   cache:
     # Redis가 없으면 캐시 비활성화 (CACHE_TYPE=redis로 활성화)
     type: ${CACHE_TYPE:none}
+  data:
+    redis:
+      url: ${REDIS_URL:}
 
 storage:
   type: volume

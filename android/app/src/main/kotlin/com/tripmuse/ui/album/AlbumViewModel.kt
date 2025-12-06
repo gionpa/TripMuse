@@ -6,6 +6,7 @@ import com.tripmuse.data.model.*
 import com.tripmuse.data.repository.AlbumRepository
 import com.tripmuse.data.repository.MediaRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,22 +68,29 @@ class AlbumViewModel @Inject constructor(
             MediaFilter.VIDEO -> MediaType.VIDEO
         }
 
-        mediaRepository.getMediaByAlbum(albumId, mediaType)
-            .onSuccess { mediaList ->
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    mediaList = mediaList
-                )
-                if (scheduleFollowUp) {
-                    scheduleRefresh(albumId, mediaList)
+        try {
+            mediaRepository.getMediaByAlbum(albumId, mediaType)
+                .onSuccess { mediaList ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        mediaList = mediaList
+                    )
+                    if (scheduleFollowUp) {
+                        scheduleRefresh(albumId, mediaList)
+                    }
                 }
-            }
-            .onFailure { e ->
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message ?: "Failed to load media"
-                )
-            }
+                .onFailure { e ->
+                    // Ignore cancellation exceptions - they're expected when switching tabs
+                    if (e is CancellationException) throw e
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = e.message ?: "Failed to load media"
+                    )
+                }
+        } catch (e: CancellationException) {
+            // Rethrow cancellation - this is expected behavior when switching tabs
+            throw e
+        }
     }
 
     fun setFilter(filter: MediaFilter) {

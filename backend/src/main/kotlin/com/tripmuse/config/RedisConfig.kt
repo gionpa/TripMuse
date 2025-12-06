@@ -4,9 +4,9 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.cache.RedisCacheManagerBuilderCustomizer
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.boot.autoconfigure.data.redis.RedisProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.redis.cache.RedisCacheConfiguration
@@ -22,18 +22,24 @@ import java.net.URI
 @Configuration
 @ConditionalOnProperty(name = ["spring.cache.type"], havingValue = "redis")
 class RedisConfig(
-    private val redisProperties: RedisProperties
+    @Value("\${spring.data.redis.url:}") private val redisUrl: String
 ) {
 
     @Bean
     fun redisConnectionFactory(): RedisConnectionFactory {
-        val urlConfig = ParsedRedisUrl.from(redisProperties.url)
-        val standaloneConfig = buildStandaloneConfig(redisProperties, urlConfig)
+        val urlConfig = ParsedRedisUrl.from(redisUrl)
+            ?: throw IllegalArgumentException("REDIS_URL is required when CACHE_TYPE=redis")
+
+        val standaloneConfig = RedisStandaloneConfiguration().apply {
+            hostName = urlConfig.host
+            port = urlConfig.port
+            urlConfig.password?.let { setPassword(it) }
+        }
 
         val clientConfigBuilder = LettuceClientConfiguration.builder()
             .commandTimeout(Duration.ofSeconds(5))
             .shutdownTimeout(Duration.ZERO)
-        if (redisProperties.ssl.isEnabled || urlConfig?.useSsl == true) {
+        if (urlConfig.useSsl) {
             clientConfigBuilder.useSsl()
         }
 
@@ -65,35 +71,6 @@ class RedisConfig(
                     "albumMedia",
                     cacheConfiguration.entryTtl(Duration.ofMinutes(3))
                 )
-        }
-    }
-
-    private fun buildStandaloneConfig(
-        redisProperties: RedisProperties,
-        urlConfig: ParsedRedisUrl?
-    ): RedisStandaloneConfiguration {
-        urlConfig?.let { parsed ->
-            return RedisStandaloneConfiguration().apply {
-                hostName = parsed.host
-                port = parsed.port
-                parsed.password?.let { setPassword(it) }
-            }
-        }
-
-        val host = redisProperties.host
-        val port = if (redisProperties.port > 0) redisProperties.port else 6379
-
-        require(host.isNotBlank()) { "Redis host is empty. Set REDIS_URL or REDIS_HOST." }
-
-        return RedisStandaloneConfiguration().apply {
-            hostName = host
-            this.port = port
-            if (!redisProperties.username.isNullOrBlank()) {
-                username = redisProperties.username
-            }
-            if (!redisProperties.password.isNullOrBlank()) {
-                setPassword(redisProperties.password)
-            }
         }
     }
 
