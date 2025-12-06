@@ -5,6 +5,7 @@ import com.tripmuse.domain.UploadStatus
 import com.tripmuse.dto.response.MediaDetailResponse
 import com.tripmuse.dto.response.MediaListResponse
 import com.tripmuse.dto.response.MediaResponse
+import com.tripmuse.security.CustomUserDetails
 import com.tripmuse.service.MediaService
 import com.tripmuse.service.StorageService
 import org.slf4j.LoggerFactory
@@ -14,6 +15,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType as SpringMediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 
@@ -26,61 +28,61 @@ class MediaController(
     private val logger = LoggerFactory.getLogger(MediaController::class.java)
     @GetMapping("/albums/{albumId}/media")
     fun getMediaByAlbum(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable albumId: Long,
         @RequestParam(required = false) type: MediaType?
     ): ResponseEntity<MediaListResponse> {
-        val mediaList = mediaService.getMediaByAlbum(albumId, userId, type)
+        val mediaList = mediaService.getMediaByAlbum(albumId, user.id, type)
         return ResponseEntity.ok(mediaList)
     }
 
     @PostMapping("/albums/{albumId}/media")
     fun uploadMedia(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable albumId: Long,
         @RequestParam("file") file: MultipartFile,
         @RequestParam("latitude", required = false) latitude: Double?,
         @RequestParam("longitude", required = false) longitude: Double?,
         @RequestParam("takenAt", required = false) takenAt: String?
     ): ResponseEntity<MediaResponse> {
-        logger.info("UploadMedia request userId=$userId, albumId=$albumId, filename='${file.originalFilename}', contentType=${file.contentType}, size=${file.size}")
-        val media = mediaService.uploadMedia(albumId, userId, file, latitude, longitude, takenAt)
+        logger.info("UploadMedia request userId=${user.id}, albumId=$albumId, filename='${file.originalFilename}', contentType=${file.contentType}, size=${file.size}")
+        val media = mediaService.uploadMedia(albumId, user.id, file, latitude, longitude, takenAt)
         return ResponseEntity.status(HttpStatus.CREATED).body(media)
     }
 
     @GetMapping("/media/{mediaId}")
     fun getMediaDetail(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable mediaId: Long
     ): ResponseEntity<MediaDetailResponse> {
-        val media = mediaService.getMediaDetail(mediaId, userId)
+        val media = mediaService.getMediaDetail(mediaId, user.id)
         return ResponseEntity.ok(media)
     }
 
     @DeleteMapping("/media/{mediaId}")
     fun deleteMedia(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable mediaId: Long
     ): ResponseEntity<Void> {
-        mediaService.deleteMedia(mediaId, userId)
+        mediaService.deleteMedia(mediaId, user.id)
         return ResponseEntity.noContent().build()
     }
 
     @PostMapping("/media/{mediaId}/cover")
     fun setCoverImage(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable mediaId: Long
     ): ResponseEntity<MediaResponse> {
-        val media = mediaService.setCoverImage(mediaId, userId)
+        val media = mediaService.setCoverImage(mediaId, user.id)
         return ResponseEntity.ok(media)
     }
 
     @GetMapping("/media/{mediaId}/file")
     fun getMediaFile(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable mediaId: Long
     ): ResponseEntity<Resource> {
-        val media = mediaService.getMediaDetail(mediaId, userId)
+        val media = mediaService.getMediaDetail(mediaId, user.id)
 
         if (media.uploadStatus != UploadStatus.COMPLETED) {
             return ResponseEntity.status(HttpStatus.ACCEPTED).build()

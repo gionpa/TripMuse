@@ -1,8 +1,10 @@
 package com.tripmuse.controller
 
 import com.tripmuse.dto.response.UserResponse
+import com.tripmuse.security.CustomUserDetails
 import com.tripmuse.service.UserService
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -10,13 +12,11 @@ import org.springframework.web.bind.annotation.*
 class UserController(
     private val userService: UserService
 ) {
-    // TODO: Replace with actual authentication
-    // For now, using header-based user ID
     @GetMapping("/me")
     fun getCurrentUser(
-        @RequestHeader("X-User-Id") userId: Long
+        @AuthenticationPrincipal user: CustomUserDetails
     ): ResponseEntity<UserResponse> {
-        val user = userService.getCurrentUser(userId)
-        return ResponseEntity.ok(user)
+        val currentUser = userService.getCurrentUser(user.id)
+        return ResponseEntity.ok(currentUser)
     }
 }

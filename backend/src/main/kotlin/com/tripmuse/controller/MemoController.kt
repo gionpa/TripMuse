@@ -2,8 +2,10 @@ package com.tripmuse.controller
 
 import com.tripmuse.dto.request.UpdateMemoRequest
 import com.tripmuse.dto.response.MemoResponse
+import com.tripmuse.security.CustomUserDetails
 import com.tripmuse.service.MemoService
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -13,29 +15,29 @@ class MemoController(
 ) {
     @GetMapping
     fun getMemo(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable mediaId: Long
     ): ResponseEntity<MemoResponse?> {
-        val memo = memoService.getMemo(mediaId, userId)
+        val memo = memoService.getMemo(mediaId, user.id)
         return ResponseEntity.ok(memo)
     }
 
     @PutMapping
     fun createOrUpdateMemo(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable mediaId: Long,
         @RequestBody request: UpdateMemoRequest
     ): ResponseEntity<MemoResponse> {
-        val memo = memoService.createOrUpdateMemo(mediaId, userId, request)
+        val memo = memoService.createOrUpdateMemo(mediaId, user.id, request)
         return ResponseEntity.ok(memo)
     }
 
     @DeleteMapping
     fun deleteMemo(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable mediaId: Long
     ): ResponseEntity<Void> {
-        memoService.deleteMemo(mediaId, userId)
+        memoService.deleteMemo(mediaId, user.id)
         return ResponseEntity.noContent().build()
     }
 }

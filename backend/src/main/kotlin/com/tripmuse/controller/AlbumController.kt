@@ -6,10 +6,12 @@ import com.tripmuse.dto.request.UpdateAlbumRequest
 import com.tripmuse.dto.response.AlbumDetailResponse
 import com.tripmuse.dto.response.AlbumListResponse
 import com.tripmuse.dto.response.AlbumResponse
+import com.tripmuse.security.CustomUserDetails
 import com.tripmuse.service.AlbumService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -19,55 +21,55 @@ class AlbumController(
 ) {
     @GetMapping
     fun getAlbums(
-        @RequestHeader("X-User-Id") userId: Long
+        @AuthenticationPrincipal user: CustomUserDetails
     ): ResponseEntity<AlbumListResponse> {
-        val albums = albumService.getAlbumsByUser(userId)
+        val albums = albumService.getAlbumsByUser(user.id)
         return ResponseEntity.ok(albums)
     }
 
     @PostMapping
     fun createAlbum(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @Valid @RequestBody request: CreateAlbumRequest
     ): ResponseEntity<AlbumResponse> {
-        val album = albumService.createAlbum(userId, request)
+        val album = albumService.createAlbum(user.id, request)
         return ResponseEntity.status(HttpStatus.CREATED).body(album)
     }
 
     @GetMapping("/{albumId}")
     fun getAlbumDetail(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable albumId: Long
     ): ResponseEntity<AlbumDetailResponse> {
-        val album = albumService.getAlbumDetail(albumId, userId)
+        val album = albumService.getAlbumDetail(albumId, user.id)
         return ResponseEntity.ok(album)
     }
 
     @PutMapping("/{albumId}")
     fun updateAlbum(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable albumId: Long,
         @Valid @RequestBody request: UpdateAlbumRequest
     ): ResponseEntity<AlbumResponse> {
-        val album = albumService.updateAlbum(albumId, userId, request)
+        val album = albumService.updateAlbum(albumId, user.id, request)
         return ResponseEntity.ok(album)
     }
 
     @DeleteMapping("/{albumId}")
     fun deleteAlbum(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable albumId: Long
     ): ResponseEntity<Void> {
-        albumService.deleteAlbum(albumId, userId)
+        albumService.deleteAlbum(albumId, user.id)
         return ResponseEntity.noContent().build()
     }
 
     @PutMapping("/reorder")
     fun reorderAlbums(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @Valid @RequestBody request: ReorderAlbumsRequest
     ): ResponseEntity<Void> {
-        albumService.reorderAlbums(userId, request.albumIds)
+        albumService.reorderAlbums(user.id, request.albumIds)
         return ResponseEntity.noContent().build()
     }
 }
