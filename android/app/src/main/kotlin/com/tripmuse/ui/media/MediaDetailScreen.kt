@@ -2,8 +2,6 @@ package com.tripmuse.ui.media
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.location.Geocoder
-import android.os.Build
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -20,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,11 +42,6 @@ import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.tripmuse.data.model.Comment
 import com.tripmuse.data.model.MediaType
-import java.util.Locale
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -180,6 +174,7 @@ fun MediaDetailScreen(
                             MemoSection(
                                 memo = uiState.media!!.memo?.content,
                                 isEditing = uiState.isEditingMemo,
+                                isSaving = uiState.isSavingMemo,
                                 editContent = uiState.memoContent,
                                 onEditClick = { viewModel.setEditingMemo(true) },
                                 onCancelClick = { viewModel.setEditingMemo(false) },
@@ -507,37 +502,6 @@ fun VideoPlayer(videoUrl: String) {
 
 @Composable
 fun MediaMetadataSection(media: com.tripmuse.data.model.MediaDetail) {
-    val context = LocalContext.current
-    var locationName by remember(media.latitude, media.longitude) { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(media.latitude, media.longitude) {
-        val lat = media.latitude
-        val lon = media.longitude
-        if (lat != null && lon != null) {
-            try {
-                if (!Geocoder.isPresent()) {
-                    locationName = null
-                    return@LaunchedEffect
-                }
-                val geocoder = Geocoder(context, Locale.getDefault())
-                val address = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    suspendCancellableCoroutine { cont ->
-                        geocoder.getFromLocation(lat, lon, 1) { result ->
-                            cont.resume(result.firstOrNull())
-                        }
-                    }
-                } else {
-                    withContext(Dispatchers.IO) {
-                        geocoder.getFromLocation(lat, lon, 1)?.firstOrNull()
-                    }
-                }
-                locationName = address.toLocationString()
-            } catch (_: Exception) {
-                locationName = null
-            }
-        }
-    }
-
     Column(
         modifier = Modifier.padding(16.dp)
     ) {
@@ -558,7 +522,13 @@ fun MediaMetadataSection(media: com.tripmuse.data.model.MediaDetail) {
             }
         }
 
-        if (media.latitude != null && media.longitude != null) {
+        // Display location if locationName or coordinates available
+        val locationText = media.locationName
+            ?: if (media.latitude != null && media.longitude != null) {
+                "%.4f, %.4f".format(media.latitude, media.longitude)
+            } else null
+
+        if (locationText != null) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(top = 8.dp)
@@ -571,7 +541,7 @@ fun MediaMetadataSection(media: com.tripmuse.data.model.MediaDetail) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = locationName ?: "%.4f, %.4f".format(media.latitude, media.longitude),
+                    text = locationText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -580,22 +550,11 @@ fun MediaMetadataSection(media: com.tripmuse.data.model.MediaDetail) {
     }
 }
 
-private fun android.location.Address?.toLocationString(): String? {
-    if (this == null) return null
-    val city = listOfNotNull(locality, subAdminArea, adminArea).distinct().firstOrNull()
-    val country = countryName
-    return when {
-        city != null && country != null && city != country -> "$city, $country"
-        city != null -> city
-        country != null -> country
-        else -> null
-    }
-}
-
 @Composable
 fun MemoSection(
     memo: String?,
     isEditing: Boolean,
+    isSaving: Boolean,
     editContent: String,
     onEditClick: () -> Unit,
     onCancelClick: () -> Unit,
@@ -605,7 +564,10 @@ fun MemoSection(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -616,7 +578,8 @@ fun MemoSection(
                 Icon(
                     Icons.Default.Edit,
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -624,14 +587,20 @@ fun MemoSection(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                if (!isEditing) {
+                if (!isEditing && !isSaving) {
                     TextButton(onClick = onEditClick) {
-                        Text("편집")
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (memo.isNullOrEmpty()) "추가" else "편집")
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             if (isEditing) {
                 OutlinedTextField(
@@ -639,32 +608,84 @@ fun MemoSection(
                     onValueChange = onContentChange,
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
-                    maxLines = 5,
-                    placeholder = { Text("메모를 입력하세요...") }
+                    maxLines = 6,
+                    enabled = !isSaving,
+                    placeholder = { Text("이 사진에 대한 메모를 남겨보세요...") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                    ),
+                    shape = MaterialTheme.shapes.medium
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
+                        .padding(top = 12.dp),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onCancelClick) {
+                    OutlinedButton(
+                        onClick = onCancelClick,
+                        enabled = !isSaving
+                    ) {
                         Text("취소")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = onSaveClick) {
-                        Text("저장")
+                    Button(
+                        onClick = onSaveClick,
+                        enabled = !isSaving
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("저장 중...")
+                        } else {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("저장")
+                        }
                     }
                 }
             } else {
-                Text(
-                    text = memo ?: "메모가 없습니다",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (memo != null)
-                        MaterialTheme.colorScheme.onSurface
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (memo.isNullOrEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onEditClick)
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "메모를 추가하세요",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    Text(
+                        text = memo,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onEditClick)
+                            .padding(vertical = 4.dp)
+                    )
+                }
             }
         }
     }

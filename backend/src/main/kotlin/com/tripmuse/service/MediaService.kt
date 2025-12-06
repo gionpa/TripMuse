@@ -34,7 +34,8 @@ class MediaService(
     private val commentRepository: CommentRepository,
     private val albumService: AlbumService,
     private val storageService: StorageService,
-    private val mediaUploadAsyncService: MediaUploadAsyncService
+    private val mediaUploadAsyncService: MediaUploadAsyncService,
+    private val geocodingService: GeocodingService
 ) {
     private val logger = LoggerFactory.getLogger(MediaService::class.java)
 
@@ -59,7 +60,10 @@ class MediaService(
             mediaRepository.findByAlbumIdWithAlbumOrderByTakenAtDesc(albumId)
         }
 
-        return MediaListResponse(mediaList.map { MediaResponse.from(it) })
+        return MediaListResponse(mediaList.map { media ->
+            val locationName = geocodingService.reverseGeocode(media.latitude, media.longitude)
+            MediaResponse.from(media, locationName)
+        })
     }
 
     @Cacheable(
@@ -75,7 +79,8 @@ class MediaService(
         albumService.getAlbumDetail(media.album.id, userId)
 
         val commentCount = commentRepository.countByMediaId(mediaId)
-        return MediaDetailResponse.from(media, commentCount)
+        val locationName = geocodingService.reverseGeocode(media.latitude, media.longitude)
+        return MediaDetailResponse.from(media, commentCount, locationName)
     }
 
     @Caching(evict = [

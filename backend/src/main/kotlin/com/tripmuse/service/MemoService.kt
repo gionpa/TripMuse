@@ -4,6 +4,7 @@ import com.tripmuse.domain.Memo
 import com.tripmuse.dto.request.UpdateMemoRequest
 import com.tripmuse.dto.response.MemoResponse
 import com.tripmuse.repository.MemoRepository
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -23,6 +24,7 @@ class MemoService(
             .orElse(null)
     }
 
+    @CacheEvict(cacheNames = ["mediaDetail"], allEntries = true)
     @Transactional
     fun createOrUpdateMemo(mediaId: Long, userId: Long, request: UpdateMemoRequest): MemoResponse {
         val media = mediaService.findMediaById(mediaId)
@@ -41,6 +43,7 @@ class MemoService(
         return MemoResponse.from(savedMemo)
     }
 
+    @CacheEvict(cacheNames = ["mediaDetail"], allEntries = true)
     @Transactional
     fun deleteMemo(mediaId: Long, userId: Long) {
         val media = mediaService.findMediaById(mediaId)

@@ -17,12 +17,13 @@ data class MediaResponse(
     val fileSize: Long?,
     val latitude: Double?,
     val longitude: Double?,
+    val locationName: String?,
     val takenAt: LocalDateTime?,
     val isCover: Boolean,
     val createdAt: LocalDateTime
 ) {
     companion object {
-        fun from(media: Media, baseUrl: String = "/media/files"): MediaResponse {
+        fun from(media: Media, locationName: String? = null, baseUrl: String = "/media/files"): MediaResponse {
             return MediaResponse(
                 id = media.id,
                 type = media.type,
@@ -35,6 +36,7 @@ data class MediaResponse(
                 fileSize = media.fileSize,
                 latitude = media.latitude,
                 longitude = media.longitude,
+                locationName = locationName,
                 takenAt = media.takenAt,
                 isCover = media.isCover,
                 createdAt = media.createdAt
@@ -59,6 +61,7 @@ data class MediaDetailResponse(
     val fileSize: Long?,
     val latitude: Double?,
     val longitude: Double?,
+    val locationName: String?,
     val takenAt: LocalDateTime?,
     val isCover: Boolean,
     val memo: MemoResponse?,
@@ -66,7 +69,7 @@ data class MediaDetailResponse(
     val createdAt: LocalDateTime
 ) {
     companion object {
-        fun from(media: Media, commentCount: Long, baseUrl: String = "/media/files"): MediaDetailResponse {
+        fun from(media: Media, commentCount: Long, locationName: String? = null, baseUrl: String = "/media/files"): MediaDetailResponse {
             return MediaDetailResponse(
                 id = media.id,
                 type = media.type,
@@ -79,6 +82,7 @@ data class MediaDetailResponse(
                 fileSize = media.fileSize,
                 latitude = media.latitude,
                 longitude = media.longitude,
+                locationName = locationName,
                 takenAt = media.takenAt,
                 isCover = media.isCover,
                 memo = media.memo?.let { MemoResponse.from(it) },

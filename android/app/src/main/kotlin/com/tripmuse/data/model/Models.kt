@@ -76,6 +76,7 @@ data class Media(
     val fileSize: Long?,
     val latitude: Double?,
     val longitude: Double?,
+    val locationName: String?,
     val takenAt: String?,
     val isCover: Boolean = false,
     val createdAt: String
@@ -93,6 +94,7 @@ data class MediaDetail(
     val fileSize: Long?,
     val latitude: Double?,
     val longitude: Double?,
+    val locationName: String?,
     val takenAt: String?,
     val isCover: Boolean = false,
     val memo: Memo?,
