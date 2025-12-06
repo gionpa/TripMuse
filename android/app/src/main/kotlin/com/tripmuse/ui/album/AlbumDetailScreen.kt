@@ -49,13 +49,10 @@ fun AlbumDetailScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(albumId) {
-        viewModel.loadAlbum(albumId)
-    }
-
-    // 화면으로 복귀 시 앨범/미디어를 최신 상태로 재로딩
+    // 화면 진입 및 복귀 시 앨범/미디어를 최신 상태로 로딩
+    // repeatOnLifecycle(STARTED)를 사용하여 첫 진입 시에도 호출되고, 백그라운드에서 복귀 시에도 호출됨
     LaunchedEffect(lifecycleOwner, albumId) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.loadAlbum(albumId)
         }
     }

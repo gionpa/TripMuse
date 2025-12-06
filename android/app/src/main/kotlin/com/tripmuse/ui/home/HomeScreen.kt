@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -400,7 +401,7 @@ fun AlbumCard(
                 Text(
                     text = album.title,
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = Color(0xFF1A4A7A),  // Deep blue tone
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -442,7 +443,8 @@ fun AlbumCard(
                     Text(
                         text = "${album.mediaCount}장",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1A4A7A)  // Deep blue, matching title
                     )
                 }
             }
