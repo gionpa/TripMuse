@@ -25,7 +25,11 @@ class JwtAuthenticationFilter(
         val token = resolveToken(request)
         if (token != null && jwtTokenProvider.validateToken(token)) {
             val userId = jwtTokenProvider.getUserId(token)
-            authenticateUser(userId, request)
+            try {
+                authenticateUser(userId, request)
+            } catch (_: Exception) {
+                // 유저가 삭제되었으면 인증하지 않고 진행 (403 반환됨)
+            }
         } else {
             // 2. X-User-Id 헤더로 폴백 인증 (기존 앱 호환)
             val xUserId = request.getHeader("X-User-Id")?.toLongOrNull()
