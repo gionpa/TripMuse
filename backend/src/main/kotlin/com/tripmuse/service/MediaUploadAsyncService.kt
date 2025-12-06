@@ -3,6 +3,7 @@ package com.tripmuse.service
 import com.tripmuse.domain.MediaType
 import com.tripmuse.repository.MediaRepository
 import org.slf4j.LoggerFactory
+import org.springframework.cache.CacheManager
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -11,7 +12,8 @@ import org.springframework.transaction.annotation.Transactional
 class MediaUploadAsyncService(
     private val storageService: StorageService,
     private val mediaRepository: MediaRepository,
-    private val albumService: AlbumService
+    private val albumService: AlbumService,
+    private val cacheManager: CacheManager?
 ) {
 
     private val logger = LoggerFactory.getLogger(MediaUploadAsyncService::class.java)
@@ -60,14 +62,32 @@ class MediaUploadAsyncService(
             }
 
             media.markUploadCompleted(thumbnailPath)
+            mediaRepository.save(media)
             logger.info("Async upload completed mediaId=$mediaId, filePath=${media.filePath}, thumbnail=$thumbnailPath")
+
+            // Invalidate cache after upload completion
+            evictMediaCaches()
 
             if (thumbnailPath != null) {
                 albumService.updateCoverImageIfEmpty(albumId, "/media/files/$thumbnailPath")
             }
         } catch (e: Exception) {
             logger.error("Failed to process async upload for mediaId=$mediaId, filename=$originalFilename", e)
-            mediaRepository.findById(mediaId).ifPresent { it.markUploadFailed() }
+            mediaRepository.findById(mediaId).ifPresent {
+                it.markUploadFailed()
+                mediaRepository.save(it)
+                evictMediaCaches()
+            }
+        }
+    }
+
+    private fun evictMediaCaches() {
+        try {
+            cacheManager?.getCache("albumMedia")?.clear()
+            cacheManager?.getCache("mediaDetail")?.clear()
+            logger.info("Media caches evicted after async upload completion")
+        } catch (e: Exception) {
+            logger.warn("Failed to evict media caches", e)
         }
     }
 }
