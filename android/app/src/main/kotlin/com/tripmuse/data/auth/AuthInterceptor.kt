@@ -9,12 +9,14 @@ import javax.inject.Singleton
 
 @Singleton
 class AuthInterceptor @Inject constructor(
-    private val tokenManager: TokenManager
+    private val tokenManager: TokenManager,
+    private val authEventManager: AuthEventManager
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val accessToken = runBlocking { tokenManager.accessToken.firstOrNull() }
-        return if (!accessToken.isNullOrBlank()) {
+
+        val response = if (!accessToken.isNullOrBlank()) {
             val newReq = request.newBuilder()
                 .addHeader("Authorization", "Bearer $accessToken")
                 .build()
@@ -22,6 +24,14 @@ class AuthInterceptor @Inject constructor(
         } else {
             chain.proceed(request)
         }
+
+        // Handle 401/403 responses - clear token and emit unauthorized event
+        if (response.code == 401 || response.code == 403) {
+            runBlocking { tokenManager.clear() }
+            authEventManager.emitUnauthorized()
+        }
+
+        return response
     }
 }
 

@@ -38,6 +38,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tripmuse.data.auth.AuthEvent
+import com.tripmuse.data.auth.AuthEventManager
 import com.tripmuse.ui.album.AlbumViewModel
 import com.tripmuse.ui.album.AlbumCreateScreen
 import com.tripmuse.ui.album.AlbumDetailScreen
@@ -87,6 +89,7 @@ val bottomNavItems = listOf(
 
 @Composable
 fun TripMuseNavHost(
+    authEventManager: AuthEventManager,
     onExitApp: () -> Unit = {}
 ) {
     val navController = rememberNavController()
@@ -94,6 +97,20 @@ fun TripMuseNavHost(
     val currentDestination = navBackStackEntry?.destination
 
     var showExitDialog by remember { mutableStateOf(false) }
+
+    // Handle auth events globally - navigate to login on unauthorized
+    LaunchedEffect(Unit) {
+        authEventManager.authEvents.collect { event ->
+            when (event) {
+                is AuthEvent.Unauthorized -> {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            }
+        }
+    }
 
     val showBottomBar = bottomNavItems.any { item ->
         currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
@@ -202,8 +219,13 @@ fun TripMuseNavHost(
         ) {
             composable(Screen.Splash.route) {
                 SplashScreen(
-                    onSplashFinished = {
+                    onNavigateToHome = {
                         navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Splash.route) { inclusive = true }
+                        }
+                    },
+                    onNavigateToLogin = {
+                        navController.navigate(Screen.Login.route) {
                             popUpTo(Screen.Splash.route) { inclusive = true }
                         }
                     }
