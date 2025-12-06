@@ -2,6 +2,7 @@ package com.tripmuse.di
 
 import com.tripmuse.BuildConfig
 import com.tripmuse.data.api.TripMuseApi
+import com.tripmuse.data.auth.AuthInterceptor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,7 +27,9 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
+    fun provideOkHttpClient(
+        authInterceptor: AuthInterceptor
+    ): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor.Level.BODY
@@ -36,6 +39,7 @@ object AppModule {
         }
 
         return OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(60, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)

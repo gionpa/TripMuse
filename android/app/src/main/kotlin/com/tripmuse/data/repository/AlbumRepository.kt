@@ -10,12 +10,10 @@ class AlbumRepository @Inject constructor(
     private val api: TripMuseApi,
     private val serverBaseUrl: String
 ) {
-    // TODO: Replace with actual user ID from authentication
-    private val currentUserId: Long = 1L
 
     suspend fun getAlbums(): Result<List<Album>> {
         return try {
-            val response = api.getAlbums(currentUserId)
+            val response = api.getAlbums()
             if (response.isSuccessful) {
                 val albums = response.body()?.albums?.map { it.withFullUrls(serverBaseUrl) } ?: emptyList()
                 Result.success(albums)
@@ -31,7 +29,7 @@ class AlbumRepository @Inject constructor(
 
     suspend fun getAlbumDetail(albumId: Long): Result<AlbumDetail> {
         return try {
-            val response = api.getAlbumDetail(currentUserId, albumId)
+            val response = api.getAlbumDetail(albumId)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!.withFullUrls(serverBaseUrl))
             } else {
@@ -58,7 +56,7 @@ class AlbumRepository @Inject constructor(
 
     suspend fun createAlbum(request: CreateAlbumRequest): Result<Album> {
         return try {
-            val response = api.createAlbum(currentUserId, request)
+            val response = api.createAlbum(request)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
@@ -73,7 +71,7 @@ class AlbumRepository @Inject constructor(
 
     suspend fun updateAlbum(albumId: Long, request: UpdateAlbumRequest): Result<Album> {
         return try {
-            val response = api.updateAlbum(currentUserId, albumId, request)
+            val response = api.updateAlbum(albumId, request)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
@@ -88,7 +86,7 @@ class AlbumRepository @Inject constructor(
 
     suspend fun deleteAlbum(albumId: Long): Result<Unit> {
         return try {
-            val response = api.deleteAlbum(currentUserId, albumId)
+            val response = api.deleteAlbum(albumId)
             if (response.isSuccessful) {
                 Result.success(Unit)
             } else {
@@ -103,7 +101,7 @@ class AlbumRepository @Inject constructor(
 
     suspend fun reorderAlbums(albumIds: List<Long>): Result<Unit> {
         return try {
-            val response = api.reorderAlbums(currentUserId, ReorderAlbumsRequest(albumIds))
+            val response = api.reorderAlbums(ReorderAlbumsRequest(albumIds))
             if (response.isSuccessful) {
                 Result.success(Unit)
             } else {

@@ -33,7 +33,6 @@ class MediaRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val serverBaseUrl: String
 ) {
-    private val currentUserId: Long = 1L
     private val uploadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun uploadMediaInBackground(
@@ -49,7 +48,7 @@ class MediaRepository @Inject constructor(
 
     suspend fun getMediaByAlbum(albumId: Long, type: MediaType? = null): Result<List<Media>> {
         return try {
-            val response = api.getMediaByAlbum(currentUserId, albumId, type?.name)
+            val response = api.getMediaByAlbum(albumId, type?.name)
             if (response.isSuccessful) {
                 val mediaList = response.body()?.media?.map { it.withFullUrls(serverBaseUrl) } ?: emptyList()
                 Result.success(mediaList)
@@ -65,7 +64,7 @@ class MediaRepository @Inject constructor(
 
     suspend fun getMediaDetail(mediaId: Long): Result<MediaDetail> {
         return try {
-            val response = api.getMediaDetail(currentUserId, mediaId)
+            val response = api.getMediaDetail(mediaId)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!.withFullUrls(serverBaseUrl))
             } else {
@@ -161,7 +160,6 @@ class MediaRepository @Inject constructor(
             }
 
             val response = api.uploadMediaWithMetadata(
-                currentUserId,
                 albumId,
                 part,
                 latitudePart,
@@ -358,7 +356,7 @@ class MediaRepository @Inject constructor(
 
     suspend fun deleteMedia(mediaId: Long): Result<Unit> {
         return try {
-            val response = api.deleteMedia(currentUserId, mediaId)
+            val response = api.deleteMedia(mediaId)
             if (response.isSuccessful) {
                 Result.success(Unit)
             } else {
@@ -371,7 +369,7 @@ class MediaRepository @Inject constructor(
 
     suspend fun setCoverImage(mediaId: Long): Result<Media> {
         return try {
-            val response = api.setCoverImage(currentUserId, mediaId)
+            val response = api.setCoverImage(mediaId)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!.withFullUrls(serverBaseUrl))
             } else {

@@ -25,7 +25,7 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "BASE_URL", "\"https://tripmuse-production.up.railway.app/api/v1/\"")
+            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/api/v1/\"")
         }
         release {
             isMinifyEnabled = false
@@ -89,6 +89,9 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // DataStore for token storage
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.6.0")

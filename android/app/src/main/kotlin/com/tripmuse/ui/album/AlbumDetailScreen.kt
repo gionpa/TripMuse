@@ -204,7 +204,8 @@ fun AlbumDetailScreen(
                                     MediaThumbnail(
                                         media = media,
                                         onClick = { onMediaClick(media.id) },
-                                        onSetCover = { viewModel.setCoverImage(media.id) }
+                                        onSetCover = { viewModel.setCoverImage(media.id) },
+                                        onDelete = { viewModel.deleteMedia(media.id) }
                                     )
                                 }
                             }
@@ -313,7 +314,8 @@ fun FilterTabs(
 fun MediaThumbnail(
     media: Media,
     onClick: () -> Unit,
-    onSetCover: () -> Unit = {}
+    onSetCover: () -> Unit = {},
+    onDelete: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var showContextMenu by remember { mutableStateOf(false) }
@@ -453,6 +455,16 @@ fun MediaThumbnail(
                 },
                 leadingIcon = {
                     Icon(Icons.Default.Star, contentDescription = null)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("삭제") },
+                onClick = {
+                    showContextMenu = false
+                    onDelete()
+                },
+                leadingIcon = {
+                    Icon(Icons.Default.Delete, contentDescription = null)
                 }
             )
         }

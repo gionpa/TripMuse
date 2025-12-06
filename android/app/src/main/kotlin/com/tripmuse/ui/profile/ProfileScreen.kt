@@ -14,6 +14,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
+    onLogout: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -111,6 +112,11 @@ fun ProfileScreen(
                 icon = Icons.Default.Info,
                 title = "앱 정보",
                 onClick = { /* TODO */ }
+            )
+            ProfileMenuItem(
+                icon = Icons.Default.ExitToApp,
+                title = "로그아웃",
+                onClick = { viewModel.logout(onLogout) }
             )
         }
     }

@@ -9,11 +9,10 @@ import javax.inject.Singleton
 class MemoRepository @Inject constructor(
     private val api: TripMuseApi
 ) {
-    private val currentUserId: Long = 1L
 
     suspend fun getMemo(mediaId: Long): Result<Memo?> {
         return try {
-            val response = api.getMemo(currentUserId, mediaId)
+            val response = api.getMemo(mediaId)
             if (response.isSuccessful) {
                 Result.success(response.body())
             } else {
@@ -26,7 +25,7 @@ class MemoRepository @Inject constructor(
 
     suspend fun updateMemo(mediaId: Long, content: String): Result<Memo> {
         return try {
-            val response = api.updateMemo(currentUserId, mediaId, UpdateMemoRequest(content))
+            val response = api.updateMemo(mediaId, UpdateMemoRequest(content))
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
@@ -39,7 +38,7 @@ class MemoRepository @Inject constructor(
 
     suspend fun deleteMemo(mediaId: Long): Result<Unit> {
         return try {
-            val response = api.deleteMemo(currentUserId, mediaId)
+            val response = api.deleteMemo(mediaId)
             if (response.isSuccessful) {
                 Result.success(Unit)
             } else {

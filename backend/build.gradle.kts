@@ -26,6 +26,13 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-cache")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("org.springframework.boot:spring-boot-starter-security") // Added
+    implementation("org.springframework.boot:spring-boot-starter-webflux") // Added for WebClient
+
+    // JWT
+    implementation("io.jsonwebtoken:jjwt-api:0.11.5")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.11.5")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.11.5")
 
     // Kotlin
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")

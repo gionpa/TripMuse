@@ -19,10 +19,9 @@ data class ProfileUiState(
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    private val api: TripMuseApi
+    private val api: TripMuseApi,
+    private val authRepository: com.tripmuse.data.repository.AuthRepository
 ) : ViewModel() {
-
-    private val currentUserId: Long = 1L
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -36,7 +35,7 @@ class ProfileViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
-                val response = api.getCurrentUser(currentUserId)
+                val response = api.getCurrentUser()
                 if (response.isSuccessful && response.body() != null) {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -54,6 +53,13 @@ class ProfileViewModel @Inject constructor(
                     error = e.message ?: "오류가 발생했습니다"
                 )
             }
+        }
+    }
+
+    fun logout(onLoggedOut: () -> Unit) {
+        viewModelScope.launch {
+            authRepository.logout()
+            onLoggedOut()
         }
     }
 }

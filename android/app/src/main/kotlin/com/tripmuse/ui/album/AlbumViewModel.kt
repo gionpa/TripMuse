@@ -2,7 +2,10 @@ package com.tripmuse.ui.album
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tripmuse.data.model.*
+import com.tripmuse.data.model.AlbumDetail
+import com.tripmuse.data.model.Media
+import com.tripmuse.data.model.MediaType
+import com.tripmuse.data.model.UploadStatus
 import com.tripmuse.data.repository.AlbumRepository
 import com.tripmuse.data.repository.MediaRepository
 import dagger.hilt.android.lifecycle.HiltViewModel

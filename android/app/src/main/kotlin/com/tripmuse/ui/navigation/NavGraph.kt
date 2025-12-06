@@ -43,6 +43,7 @@ import com.tripmuse.ui.album.AlbumCreateScreen
 import com.tripmuse.ui.album.AlbumDetailScreen
 import com.tripmuse.ui.album.AlbumEditScreen
 import com.tripmuse.ui.gallery.GalleryScreen
+import com.tripmuse.ui.auth.LoginScreen
 import com.tripmuse.ui.home.HomeScreen
 import com.tripmuse.ui.media.MediaDetailScreen
 import com.tripmuse.ui.profile.ProfileScreen
@@ -51,6 +52,7 @@ import com.tripmuse.ui.splash.SplashScreen
 
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
+    object Login : Screen("login")
     object Home : Screen("home")
     object Gallery : Screen("gallery")
     object Recommendation : Screen("recommendation")
@@ -208,6 +210,16 @@ fun TripMuseNavHost(
                 )
             }
 
+            composable(Screen.Login.route) {
+                LoginScreen(
+                    onAuthSuccess = {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Login.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
             composable(Screen.Home.route) {
                 HomeScreen(
                     onAlbumClick = { albumId ->
@@ -228,7 +240,14 @@ fun TripMuseNavHost(
             }
 
             composable(Screen.Profile.route) {
-                ProfileScreen()
+                ProfileScreen(
+                    onLogout = {
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(Screen.Splash.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                )
             }
 
             composable(
