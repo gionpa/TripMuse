@@ -77,24 +77,28 @@ class AlbumViewModel @Inject constructor(
             MediaFilter.VIDEO -> MediaType.VIDEO
         }
 
-        mediaRepository.getMediaByAlbum(albumId, mediaType)
-            .onSuccess { mediaList ->
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    mediaList = mediaList
-                )
-                if (scheduleFollowUp) {
-                    scheduleRefresh(albumId, mediaList)
+        try {
+            mediaRepository.getMediaByAlbum(albumId, mediaType)
+                .onSuccess { mediaList ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        mediaList = mediaList
+                    )
+                    if (scheduleFollowUp) {
+                        scheduleRefresh(albumId, mediaList)
+                    }
                 }
-            }
-            .onFailure { e ->
-                // Ignore cancellation exceptions - they're expected when switching tabs
-                if (e is CancellationException) return@onFailure
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message ?: "Failed to load media"
-                )
-            }
+                .onFailure { e ->
+                    // Ignore cancellation exceptions - they're expected when switching tabs
+                    if (e is CancellationException) return@onFailure
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = e.message ?: "Failed to load media"
+                    )
+                }
+        } catch (e: CancellationException) {
+            // Silently ignore - expected when switching tabs or cancelling refresh
+        }
     }
 
     fun setFilter(filter: MediaFilter) {
@@ -112,13 +116,17 @@ class AlbumViewModel @Inject constructor(
         val attempts = if (hasProcessing) 30 else 5
         val interval = if (hasProcessing) 2000L else 1500L
         refreshJob = viewModelScope.launch {
-            repeat(attempts) {
-                delay(interval)
-                loadMediaInternal(albumId, scheduleFollowUp = false)
-                val current = _uiState.value.mediaList
-                if (current.none { it.uploadStatus == UploadStatus.PROCESSING }) {
-                    return@launch
+            try {
+                repeat(attempts) {
+                    delay(interval)
+                    loadMediaInternal(albumId, scheduleFollowUp = false)
+                    val current = _uiState.value.mediaList
+                    if (current.none { it.uploadStatus == UploadStatus.PROCESSING }) {
+                        return@launch
+                    }
                 }
+            } catch (e: CancellationException) {
+                // Silently ignore - expected when switching tabs
             }
         }
     }
