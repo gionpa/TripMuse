@@ -62,6 +62,10 @@ class MediaService(
         return MediaListResponse(mediaList.map { MediaResponse.from(it) })
     }
 
+    @Cacheable(
+        cacheNames = ["mediaDetail"],
+        key = "#userId + ':' + #mediaId"
+    )
     fun getMediaDetail(mediaId: Long, userId: Long): MediaDetailResponse {
         // Use Fetch Join to load album in single query
         val media = mediaRepository.findByIdWithAlbum(mediaId)
@@ -74,7 +78,10 @@ class MediaService(
         return MediaDetailResponse.from(media, commentCount)
     }
 
-    @Caching(evict = [CacheEvict(cacheNames = ["albumMedia"], allEntries = true)])
+    @Caching(evict = [
+        CacheEvict(cacheNames = ["albumMedia"], allEntries = true),
+        CacheEvict(cacheNames = ["mediaDetail"], allEntries = true)
+    ])
     @Transactional
     fun uploadMedia(
         albumId: Long,
@@ -184,7 +191,10 @@ class MediaService(
         }
     }
 
-    @CacheEvict(cacheNames = ["albumMedia"], allEntries = true)
+    @Caching(evict = [
+        CacheEvict(cacheNames = ["albumMedia"], allEntries = true),
+        CacheEvict(cacheNames = ["mediaDetail"], allEntries = true)
+    ])
     @Transactional
     fun deleteMedia(mediaId: Long, userId: Long) {
         val media = findMediaById(mediaId)
@@ -197,7 +207,10 @@ class MediaService(
         mediaRepository.delete(media)
     }
 
-    @CacheEvict(cacheNames = ["albumMedia"], allEntries = true)
+    @Caching(evict = [
+        CacheEvict(cacheNames = ["albumMedia"], allEntries = true),
+        CacheEvict(cacheNames = ["mediaDetail"], allEntries = true)
+    ])
     @Transactional
     fun setCoverImage(mediaId: Long, userId: Long): MediaResponse {
         val media = findMediaById(mediaId)

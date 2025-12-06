@@ -71,6 +71,10 @@ class RedisConfig(
                     "albumMedia",
                     cacheConfiguration.entryTtl(Duration.ofMinutes(3))
                 )
+                .withCacheConfiguration(
+                    "mediaDetail",
+                    cacheConfiguration.entryTtl(Duration.ofMinutes(5))
+                )
         }
     }
 

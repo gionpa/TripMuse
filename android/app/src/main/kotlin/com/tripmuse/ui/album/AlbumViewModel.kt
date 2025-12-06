@@ -36,8 +36,13 @@ class AlbumViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AlbumDetailUiState())
     val uiState: StateFlow<AlbumDetailUiState> = _uiState.asStateFlow()
     private var refreshJob: Job? = null
+    private var loadMediaJob: Job? = null
 
     fun loadAlbum(albumId: Long) {
+        // Cancel any ongoing media loading jobs before starting new album load
+        loadMediaJob?.cancel()
+        refreshJob?.cancel()
+
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
@@ -56,7 +61,11 @@ class AlbumViewModel @Inject constructor(
     }
 
     private fun loadMedia(albumId: Long) {
-        viewModelScope.launch {
+        // Cancel previous media loading and refresh jobs to prevent concurrent access
+        loadMediaJob?.cancel()
+        refreshJob?.cancel()
+
+        loadMediaJob = viewModelScope.launch {
             loadMediaInternal(albumId, scheduleFollowUp = true)
         }
     }
@@ -68,29 +77,24 @@ class AlbumViewModel @Inject constructor(
             MediaFilter.VIDEO -> MediaType.VIDEO
         }
 
-        try {
-            mediaRepository.getMediaByAlbum(albumId, mediaType)
-                .onSuccess { mediaList ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        mediaList = mediaList
-                    )
-                    if (scheduleFollowUp) {
-                        scheduleRefresh(albumId, mediaList)
-                    }
+        mediaRepository.getMediaByAlbum(albumId, mediaType)
+            .onSuccess { mediaList ->
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    mediaList = mediaList
+                )
+                if (scheduleFollowUp) {
+                    scheduleRefresh(albumId, mediaList)
                 }
-                .onFailure { e ->
-                    // Ignore cancellation exceptions - they're expected when switching tabs
-                    if (e is CancellationException) throw e
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = e.message ?: "Failed to load media"
-                    )
-                }
-        } catch (e: CancellationException) {
-            // Rethrow cancellation - this is expected behavior when switching tabs
-            throw e
-        }
+            }
+            .onFailure { e ->
+                // Ignore cancellation exceptions - they're expected when switching tabs
+                if (e is CancellationException) return@onFailure
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.message ?: "Failed to load media"
+                )
+            }
     }
 
     fun setFilter(filter: MediaFilter) {
