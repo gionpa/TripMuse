@@ -6,7 +6,10 @@ import org.slf4j.LoggerFactory
 import org.springframework.cache.CacheManager
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 class MediaUploadAsyncService(
@@ -19,7 +22,7 @@ class MediaUploadAsyncService(
     private val logger = LoggerFactory.getLogger(MediaUploadAsyncService::class.java)
 
     @Async("mediaUploadExecutor")
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun processUploadAsync(
         mediaId: Long,
         albumId: Long,
@@ -40,6 +43,8 @@ class MediaUploadAsyncService(
                     if (fileBytes == null) {
                         logger.warn("Image bytes missing for mediaId=$mediaId")
                         media.markUploadFailed()
+                        mediaRepository.saveAndFlush(media)
+                        registerCacheEvictAfterCommit()
                         return
                     }
                     storageService.storeImageBytesAtPath(fileBytes, media.filePath)
@@ -49,6 +54,8 @@ class MediaUploadAsyncService(
                         if (fileBytes == null) {
                             logger.warn("Video bytes missing for mediaId=$mediaId and alreadyStored=false")
                             media.markUploadFailed()
+                            mediaRepository.saveAndFlush(media)
+                            registerCacheEvictAfterCommit()
                             return
                         }
                         storageService.storeBytesAt(media.filePath, fileBytes)
@@ -62,22 +69,39 @@ class MediaUploadAsyncService(
             }
 
             media.markUploadCompleted(thumbnailPath)
-            mediaRepository.save(media)
-            logger.info("Async upload completed mediaId=$mediaId, filePath=${media.filePath}, thumbnail=$thumbnailPath")
+            mediaRepository.saveAndFlush(media)
+            logger.info("Async upload completed mediaId=$mediaId, filePath=${media.filePath}, thumbnail=$thumbnailPath, status=${media.uploadStatus}")
 
-            // Invalidate cache after upload completion
-            evictMediaCaches()
+            // Register cache eviction AFTER transaction commits
+            registerCacheEvictAfterCommit()
 
             if (thumbnailPath != null) {
                 albumService.updateCoverImageIfEmpty(albumId, "/media/files/$thumbnailPath")
             }
         } catch (e: Exception) {
             logger.error("Failed to process async upload for mediaId=$mediaId, filename=$originalFilename", e)
-            mediaRepository.findById(mediaId).ifPresent {
-                it.markUploadFailed()
-                mediaRepository.save(it)
-                evictMediaCaches()
+            try {
+                mediaRepository.findById(mediaId).ifPresent {
+                    it.markUploadFailed()
+                    mediaRepository.saveAndFlush(it)
+                }
+                registerCacheEvictAfterCommit()
+            } catch (ex: Exception) {
+                logger.error("Failed to mark media as failed: $mediaId", ex)
             }
+        }
+    }
+
+    private fun registerCacheEvictAfterCommit() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+                override fun afterCommit() {
+                    evictMediaCaches()
+                }
+            })
+        } else {
+            // If no transaction sync is active, evict immediately
+            evictMediaCaches()
         }
     }
 
@@ -85,7 +109,7 @@ class MediaUploadAsyncService(
         try {
             cacheManager?.getCache("albumMedia")?.clear()
             cacheManager?.getCache("mediaDetail")?.clear()
-            logger.info("Media caches evicted after async upload completion")
+            logger.info("Media caches evicted after transaction commit")
         } catch (e: Exception) {
             logger.warn("Failed to evict media caches", e)
         }

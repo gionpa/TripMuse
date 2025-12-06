@@ -23,6 +23,13 @@
   - GRADLE_USER_HOME을 프로젝트 내부로 지정해 Gradle 8.6 다운로드 및 `:app:installDebug`로 에뮬레이터에 재설치.
   - ADB를 이용해 에뮬레이터 앱 강제 종료/재실행을 반복 수행.
 
+- **Redis 캐시/배포 설정**
+  - 백엔드에 Redis 캐시 도입: `spring-boot-starter-cache`, `spring-boot-starter-data-redis`, `@EnableCaching`, `RedisCacheConfiguration`(TTL 설정, `GenericJackson2JsonRedisSerializer` + default typing) 추가.
+  - 캐싱 대상: 앨범별 미디어 조회 `@Cacheable("albumMedia")`, 업로드/삭제/대표 설정 시 캐시 무효화.
+  - 로컬: Podman `tripmuse-redis` 컨테이너 실행해 검증 완료(캐시 hit 시 TTFB 감소 확인).
+  - 프로덕션(Railway): `REDIS_URL/REDIS_PUBLIC_URL/REDIS_HOST/PORT/USERNAME/PASSWORD` 환경변수에 맞춰 우선순위 매핑, URL에서 host/port/password/SSL 파싱하여 Lettuce 연결. 기본 host fallback `redis.railway.internal`, 기본 user `default` 적용.
+  - Redis 인증/주소 관련 배포 오류(NOAUTH/WRONGPASS/host empty) 대응: URL 파싱과 env fallback 정리 후 main에 반영해 재배포.
+
 ## 미해결/추가 확인 사항
 - 역지오코딩은 Geocoder 서비스/네트워크에 의존하므로 Play 서비스가 없는 AVD에서는 도시명이 표시되지 않을 수 있음.
 - 썸네일 지연 로딩만 도입했으며, 응답 크기/TTFB 최적화(페이징, CDN, 압축)는 추가 측정 후 적용 필요.
