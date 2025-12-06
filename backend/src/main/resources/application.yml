@@ -76,20 +76,9 @@ spring:
           batch_size: 20
         order_inserts: true
         order_updates: true
-  data:
-    redis:
-      # Railway 변수 우선순위: REDIS_URL > REDIS_PUBLIC_URL, 없으면 host/port 사용
-      url: ${REDIS_URL:${REDIS_PUBLIC_URL:}}
-      host: ${REDIS_HOST:${REDISHOST:redis.railway.internal}}
-      port: ${REDIS_PORT:${REDISPORT:6379}}
-      username: ${REDIS_USERNAME:${REDISUSER:default}}
-      password: ${REDIS_PASSWORD:${REDISPASSWORD:}}
-      ssl:
-        enabled: ${REDIS_SSL:false}
   cache:
-    type: redis
-    redis:
-      time-to-live: 300000
+    # Redis가 없으면 캐시 비활성화 (CACHE_TYPE=redis로 활성화)
+    type: ${CACHE_TYPE:none}
 
 storage:
   type: volume
