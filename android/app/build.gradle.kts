@@ -8,14 +8,14 @@ plugins {
 
 android {
     namespace = "com.tripmuse"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.tripmuse"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        targetSdk = 35
+        versionCode = 4
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -23,9 +23,18 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(project.property("RELEASE_STORE_FILE") as String)
+            storePassword = project.property("RELEASE_STORE_PASSWORD") as String
+            keyAlias = project.property("RELEASE_KEY_ALIAS") as String
+            keyPassword = project.property("RELEASE_KEY_PASSWORD") as String
+        }
+    }
+
     buildTypes {
         debug {
-            buildConfigField("String", "BASE_URL", "\"https://tripmuse-production.up.railway.app/api/v1/\"")
+            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/api/v1/\"")
         }
         release {
             isMinifyEnabled = false
@@ -34,6 +43,7 @@ android {
                 "proguard-rules.pro"
             )
             buildConfigField("String", "BASE_URL", "\"https://tripmuse-production.up.railway.app/api/v1/\"")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

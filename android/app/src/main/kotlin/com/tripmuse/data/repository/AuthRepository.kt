@@ -7,6 +7,9 @@ import com.tripmuse.data.model.auth.LoginRequest
 import com.tripmuse.data.model.auth.NaverLoginRequest
 import com.tripmuse.data.model.auth.SignupRequest
 import kotlinx.coroutines.CancellationException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,12 +49,26 @@ class AuthRepository @Inject constructor(
                 tokenManager.saveTokens(body.accessToken, body.refreshToken)
                 Result.success(body)
             } else {
-                Result.failure(Exception("Auth failed: ${response.code()}"))
+                val errorMessage = when (response.code()) {
+                    401 -> "이메일 또는 비밀번호가 올바르지 않습니다."
+                    403 -> "접근이 거부되었습니다."
+                    404 -> "사용자를 찾을 수 없습니다."
+                    409 -> "이미 등록된 이메일입니다."
+                    500 -> "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+                    else -> "인증 실패: ${response.code()}"
+                }
+                Result.failure(Exception(errorMessage))
             }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: UnknownHostException) {
+            Result.failure(Exception("네트워크 연결을 확인해주세요. 인터넷에 연결되어 있는지 확인하세요."))
+        } catch (e: ConnectException) {
+            Result.failure(Exception("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."))
+        } catch (e: SocketTimeoutException) {
+            Result.failure(Exception("서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요."))
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception("네트워크 오류: ${e.localizedMessage ?: "알 수 없는 오류"}"))
         }
     }
 }

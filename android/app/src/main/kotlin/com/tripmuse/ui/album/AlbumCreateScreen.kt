@@ -2,6 +2,8 @@ package com.tripmuse.ui.album
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -9,8 +11,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tripmuse.data.model.AlbumVisibility
 import com.tripmuse.ui.components.DatePickerField
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -96,25 +100,42 @@ fun AlbumCreateScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "공개 설정",
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Switch(
-                    checked = uiState.isPublic,
-                    onCheckedChange = { viewModel.updateIsPublic(it) }
-                )
-            }
             Text(
-                text = if (uiState.isPublic) "전체 공개" else "나만 보기",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = "공개 설정",
+                style = MaterialTheme.typography.bodyLarge
             )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Column(modifier = Modifier.selectableGroup()) {
+                val visibilityOptions = listOf(
+                    AlbumVisibility.PRIVATE to "나만 보기",
+                    AlbumVisibility.FRIENDS_ONLY to "친구에게 공개",
+                    AlbumVisibility.PUBLIC to "전체 공개"
+                )
+                visibilityOptions.forEach { (visibility, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = uiState.visibility == visibility,
+                                onClick = { viewModel.updateVisibility(visibility) },
+                                role = Role.RadioButton
+                            )
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = uiState.visibility == visibility,
+                            onClick = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
 
             if (uiState.error != null) {
                 Spacer(modifier = Modifier.height(16.dp))

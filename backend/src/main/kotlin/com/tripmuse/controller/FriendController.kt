@@ -4,9 +4,11 @@ import com.tripmuse.dto.AddFriendRequest
 import com.tripmuse.dto.FriendListResponse
 import com.tripmuse.dto.FriendResponse
 import com.tripmuse.dto.UserSearchListResponse
+import com.tripmuse.security.CustomUserDetails
 import com.tripmuse.service.FriendService
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -17,36 +19,36 @@ class FriendController(
 
     @GetMapping
     fun getFriends(
-        @RequestHeader("X-User-Id") userId: Long
+        @AuthenticationPrincipal user: CustomUserDetails
     ): ResponseEntity<FriendListResponse> {
-        val response = friendService.getFriends(userId)
+        val response = friendService.getFriends(user.id)
         return ResponseEntity.ok(response)
     }
 
     @GetMapping("/search")
     fun searchUsers(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @RequestParam query: String
     ): ResponseEntity<UserSearchListResponse> {
-        val response = friendService.searchUsers(userId, query)
+        val response = friendService.searchUsers(user.id, query)
         return ResponseEntity.ok(response)
     }
 
     @PostMapping
     fun addFriend(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @Valid @RequestBody request: AddFriendRequest
     ): ResponseEntity<FriendResponse> {
-        val response = friendService.addFriend(userId, request)
+        val response = friendService.addFriend(user.id, request)
         return ResponseEntity.ok(response)
     }
 
     @DeleteMapping("/{friendId}")
     fun removeFriend(
-        @RequestHeader("X-User-Id") userId: Long,
+        @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable friendId: Long
     ): ResponseEntity<Unit> {
-        friendService.removeFriend(userId, friendId)
+        friendService.removeFriend(user.id, friendId)
         return ResponseEntity.ok().build()
     }
 }

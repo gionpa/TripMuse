@@ -26,4 +26,10 @@ interface FriendshipRepository : JpaRepository<Friendship, Long> {
         @Param("userId") userId: Long,
         @Param("friendId") friendId: Long
     ): Boolean
+
+    @Query("SELECT f.friend.id FROM Friendship f WHERE f.user.id = :userId AND f.status = :status")
+    fun findFriendIdsByUserIdAndStatus(
+        @Param("userId") userId: Long,
+        @Param("status") status: FriendshipStatus
+    ): List<Long>
 }

@@ -2,6 +2,7 @@ package com.tripmuse.ui.album
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tripmuse.data.model.AlbumVisibility
 import com.tripmuse.data.model.UpdateAlbumRequest
 import com.tripmuse.data.repository.AlbumRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,7 +18,7 @@ data class AlbumEditUiState(
     val location: String = "",
     val startDate: String = "",
     val endDate: String = "",
-    val isPublic: Boolean = false,
+    val visibility: AlbumVisibility = AlbumVisibility.PRIVATE,
     val isInitialLoading: Boolean = true,
     val isLoading: Boolean = false,
     val isUpdated: Boolean = false,
@@ -44,7 +45,7 @@ class AlbumEditViewModel @Inject constructor(
                         location = album.location ?: "",
                         startDate = album.startDate ?: "",
                         endDate = album.endDate ?: "",
-                        isPublic = album.isPublic
+                        visibility = album.visibility
                     )
                 }
                 .onFailure { e ->
@@ -72,8 +73,8 @@ class AlbumEditViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(endDate = date)
     }
 
-    fun updateIsPublic(isPublic: Boolean) {
-        _uiState.value = _uiState.value.copy(isPublic = isPublic)
+    fun updateVisibility(visibility: AlbumVisibility) {
+        _uiState.value = _uiState.value.copy(visibility = visibility)
     }
 
     fun updateAlbum() {
@@ -92,7 +93,7 @@ class AlbumEditViewModel @Inject constructor(
                 location = state.location.ifBlank { null },
                 startDate = state.startDate.ifBlank { null },
                 endDate = state.endDate.ifBlank { null },
-                isPublic = state.isPublic
+                visibility = state.visibility
             )
 
             albumRepository.updateAlbum(state.albumId, request)

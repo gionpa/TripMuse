@@ -389,7 +389,8 @@ fun AlbumCard(
                             onClick = {
                                 showMenu = false
                                 onDeleteClick()
-                            }
+                            },
+                            enabled = album.isOwner
                         )
                     }
                 }

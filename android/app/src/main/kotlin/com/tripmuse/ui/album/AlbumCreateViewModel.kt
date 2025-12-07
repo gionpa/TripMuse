@@ -2,6 +2,7 @@ package com.tripmuse.ui.album
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tripmuse.data.model.AlbumVisibility
 import com.tripmuse.data.model.CreateAlbumRequest
 import com.tripmuse.data.repository.AlbumRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,7 +17,7 @@ data class AlbumCreateUiState(
     val location: String = "",
     val startDate: String = "",
     val endDate: String = "",
-    val isPublic: Boolean = false,
+    val visibility: AlbumVisibility = AlbumVisibility.PRIVATE,
     val isLoading: Boolean = false,
     val error: String? = null,
     val createdAlbumId: Long? = null
@@ -46,8 +47,8 @@ class AlbumCreateViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(endDate = endDate)
     }
 
-    fun updateIsPublic(isPublic: Boolean) {
-        _uiState.value = _uiState.value.copy(isPublic = isPublic)
+    fun updateVisibility(visibility: AlbumVisibility) {
+        _uiState.value = _uiState.value.copy(visibility = visibility)
     }
 
     fun createAlbum() {
@@ -66,7 +67,7 @@ class AlbumCreateViewModel @Inject constructor(
                 location = state.location.ifBlank { null },
                 startDate = state.startDate.ifBlank { null },
                 endDate = state.endDate.ifBlank { null },
-                isPublic = state.isPublic
+                visibility = state.visibility
             )
 
             albumRepository.createAlbum(request)

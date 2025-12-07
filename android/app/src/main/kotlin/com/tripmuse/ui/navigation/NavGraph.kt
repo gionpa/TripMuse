@@ -8,9 +8,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Person
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.*
@@ -48,6 +50,7 @@ import com.tripmuse.ui.gallery.GalleryScreen
 import com.tripmuse.ui.auth.LoginScreen
 import com.tripmuse.ui.home.HomeScreen
 import com.tripmuse.ui.media.MediaDetailScreen
+import com.tripmuse.ui.friend.FriendScreen
 import com.tripmuse.ui.profile.ProfileScreen
 import com.tripmuse.ui.recommendation.RecommendationScreen
 import com.tripmuse.ui.splash.SplashScreen
@@ -59,6 +62,7 @@ sealed class Screen(val route: String) {
     object Gallery : Screen("gallery")
     object Recommendation : Screen("recommendation")
     object Profile : Screen("profile")
+    object Friend : Screen("friend")
     object AlbumDetail : Screen("album/{albumId}") {
         fun createRoute(albumId: Long) = "album/$albumId"
     }
@@ -83,6 +87,7 @@ data class BottomNavItem(
 
 val bottomNavItems = listOf(
     BottomNavItem(Screen.Home, "앨범", Icons.Filled.Home, Icons.Outlined.Home),
+    BottomNavItem(Screen.Friend, "친구", Icons.Filled.People, Icons.Outlined.People),
     BottomNavItem(Screen.Recommendation, "추천", Icons.Filled.Lightbulb, Icons.Outlined.Lightbulb),
     BottomNavItem(Screen.Profile, "프로필", Icons.Filled.Person, Icons.Outlined.Person)
 )
@@ -270,6 +275,10 @@ fun TripMuseNavHost(
                         }
                     }
                 )
+            }
+
+            composable(Screen.Friend.route) {
+                FriendScreen()
             }
 
             composable(

@@ -36,8 +36,9 @@ class Album(
     @Column(length = 500)
     var coverImageUrl: String? = null,
 
-    @Column(nullable = false)
-    var isPublic: Boolean = false,
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    var visibility: AlbumVisibility = AlbumVisibility.PRIVATE,
 
     @Column(nullable = false)
     var displayOrder: Int = 0
@@ -57,7 +58,7 @@ class Album(
         startDate: LocalDate?,
         endDate: LocalDate?,
         coverImageUrl: String?,
-        isPublic: Boolean
+        visibility: AlbumVisibility
     ) {
         this.title = title
         this.location = location
@@ -66,7 +67,7 @@ class Album(
         this.startDate = startDate
         this.endDate = endDate
         this.coverImageUrl = coverImageUrl
-        this.isPublic = isPublic
+        this.visibility = visibility
     }
 
     fun addMedia(media: Media) {

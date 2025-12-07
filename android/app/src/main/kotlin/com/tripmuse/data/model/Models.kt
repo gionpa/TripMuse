@@ -2,6 +2,13 @@ package com.tripmuse.data.model
 
 import com.google.gson.annotations.SerializedName
 
+// Album Visibility
+enum class AlbumVisibility {
+    PRIVATE,       // 나만 보기
+    FRIENDS_ONLY,  // 친구에게 공개
+    PUBLIC         // 전체 공개
+}
+
 // User
 data class User(
     val id: Long,
@@ -28,8 +35,9 @@ data class Album(
     val startDate: String?,
     val endDate: String?,
     val coverImageUrl: String?,
-    val isPublic: Boolean,
+    val visibility: AlbumVisibility,
     val mediaCount: Long,
+    val isOwner: Boolean = true,
     val createdAt: String,
     val updatedAt: String
 )
@@ -43,10 +51,11 @@ data class AlbumDetail(
     val startDate: String?,
     val endDate: String?,
     val coverImageUrl: String?,
-    val isPublic: Boolean,
+    val visibility: AlbumVisibility,
     val mediaCount: Long,
     val commentCount: Long,
     val owner: User,
+    val isOwner: Boolean = false,
     val createdAt: String,
     val updatedAt: String
 )
@@ -159,7 +168,7 @@ data class CreateAlbumRequest(
     val startDate: String? = null,
     val endDate: String? = null,
     val coverImageUrl: String? = null,
-    val isPublic: Boolean = false
+    val visibility: AlbumVisibility = AlbumVisibility.PRIVATE
 )
 
 data class UpdateAlbumRequest(
@@ -170,7 +179,7 @@ data class UpdateAlbumRequest(
     val startDate: String? = null,
     val endDate: String? = null,
     val coverImageUrl: String? = null,
-    val isPublic: Boolean = false
+    val visibility: AlbumVisibility = AlbumVisibility.PRIVATE
 )
 
 data class ReorderAlbumsRequest(

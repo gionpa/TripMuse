@@ -95,6 +95,7 @@ fun AlbumDetailScreen(
                     }
                 },
                 actions = {
+                    val isOwner = uiState.album?.isOwner == true
                     Box {
                         IconButton(onClick = { showMenu = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = "더보기")
@@ -111,7 +112,8 @@ fun AlbumDetailScreen(
                                 },
                                 leadingIcon = {
                                     Icon(Icons.Default.Edit, contentDescription = null)
-                                }
+                                },
+                                enabled = isOwner
                             )
                             DropdownMenuItem(
                                 text = { Text("앨범 삭제") },
@@ -121,7 +123,8 @@ fun AlbumDetailScreen(
                                 },
                                 leadingIcon = {
                                     Icon(Icons.Default.Delete, contentDescription = null)
-                                }
+                                },
+                                enabled = isOwner
                             )
                         }
                     }
@@ -129,7 +132,18 @@ fun AlbumDetailScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { onAddMediaClick(albumId) }) {
+            val isOwner = uiState.album?.isOwner == true
+            FloatingActionButton(
+                onClick = { if (isOwner) onAddMediaClick(albumId) },
+                containerColor = if (isOwner)
+                    MaterialTheme.colorScheme.primaryContainer
+                else
+                    MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (isOwner)
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            ) {
                 Icon(Icons.Default.Add, contentDescription = "미디어 추가")
             }
         }
@@ -203,6 +217,7 @@ fun AlbumDetailScreen(
                                 items(uiState.mediaList) { media ->
                                     MediaThumbnail(
                                         media = media,
+                                        isOwner = uiState.album?.isOwner == true,
                                         onClick = { onMediaClick(media.id) },
                                         onSetCover = { viewModel.setCoverImage(media.id) },
                                         onDelete = { viewModel.deleteMedia(media.id) }
@@ -313,6 +328,7 @@ fun FilterTabs(
 @Composable
 fun MediaThumbnail(
     media: Media,
+    isOwner: Boolean = true,
     onClick: () -> Unit,
     onSetCover: () -> Unit = {},
     onDelete: () -> Unit = {}
@@ -441,7 +457,7 @@ fun MediaThumbnail(
             }
         }
 
-        // Context menu
+        // Context menu - 항상 표시, isOwner가 아니면 메뉴 항목 비활성화
         DropdownMenu(
             expanded = showContextMenu,
             onDismissRequest = { showContextMenu = false },
@@ -455,7 +471,8 @@ fun MediaThumbnail(
                 },
                 leadingIcon = {
                     Icon(Icons.Default.Star, contentDescription = null)
-                }
+                },
+                enabled = isOwner
             )
             DropdownMenuItem(
                 text = { Text("삭제") },
@@ -465,7 +482,8 @@ fun MediaThumbnail(
                 },
                 leadingIcon = {
                     Icon(Icons.Default.Delete, contentDescription = null)
-                }
+                },
+                enabled = isOwner
             )
         }
     }

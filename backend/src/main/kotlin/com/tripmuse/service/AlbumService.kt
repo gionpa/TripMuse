@@ -1,6 +1,7 @@
 package com.tripmuse.service
 
 import com.tripmuse.domain.Album
+import com.tripmuse.domain.AlbumVisibility
 import com.tripmuse.dto.request.CreateAlbumRequest
 import com.tripmuse.dto.request.UpdateAlbumRequest
 import com.tripmuse.dto.response.AlbumDetailResponse
@@ -8,8 +9,10 @@ import com.tripmuse.dto.response.AlbumListResponse
 import com.tripmuse.dto.response.AlbumResponse
 import com.tripmuse.exception.ForbiddenException
 import com.tripmuse.exception.NotFoundException
+import com.tripmuse.domain.FriendshipStatus
 import com.tripmuse.repository.AlbumRepository
 import com.tripmuse.repository.CommentRepository
+import com.tripmuse.repository.FriendshipRepository
 import com.tripmuse.repository.MediaRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -20,20 +23,32 @@ class AlbumService(
     private val albumRepository: AlbumRepository,
     private val mediaRepository: MediaRepository,
     private val commentRepository: CommentRepository,
+    private val friendshipRepository: FriendshipRepository,
     private val userService: UserService
 ) {
     fun getAlbumsByUser(userId: Long): AlbumListResponse {
-        val albums = albumRepository.findByUserIdOrderByDisplayOrderAsc(userId)
-        // Use @Formula calculated mediaCount - no N+1 queries
-        val albumResponses = albums.map { album -> AlbumResponse.from(album) }
+        // 내 앨범 조회
+        val myAlbums = albumRepository.findByUserIdOrderByDisplayOrderAsc(userId)
+
+        // 친구의 "친구에게 공개" 앨범 조회
+        val friendIds = friendshipRepository.findFriendIdsByUserIdAndStatus(userId, FriendshipStatus.ACCEPTED)
+        val friendAlbums = if (friendIds.isNotEmpty()) {
+            albumRepository.findFriendsAlbumsWithFriendsOnlyVisibility(friendIds)
+        } else {
+            emptyList()
+        }
+
+        // 내 앨범 + 친구 앨범 합치기 (내 앨범 우선, 친구 앨범은 최신순)
+        val allAlbums = myAlbums + friendAlbums
+        val albumResponses = allAlbums.map { album -> AlbumResponse.from(album, userId) }
         return AlbumListResponse(albumResponses)
     }
 
     fun getAlbumDetail(albumId: Long, userId: Long): AlbumDetailResponse {
         val album = findAlbumById(albumId)
 
-        // Check access permission
-        if (!album.isPublic && album.user.id != userId) {
+        // Check access permission based on visibility
+        if (!canAccessAlbum(album, userId)) {
             throw ForbiddenException("Access denied to this album")
         }
 
@@ -41,7 +56,18 @@ class AlbumService(
         val commentCount = commentRepository.countByAlbumId(albumId)
 
         // Use @Formula calculated mediaCount
-        return AlbumDetailResponse.from(album, commentCount)
+        return AlbumDetailResponse.from(album, commentCount, userId)
+    }
+
+    private fun canAccessAlbum(album: Album, userId: Long): Boolean {
+        // Owner can always access
+        if (album.user.id == userId) return true
+
+        return when (album.visibility) {
+            AlbumVisibility.PUBLIC -> true
+            AlbumVisibility.FRIENDS_ONLY -> friendshipRepository.existsByUserIdAndFriendId(album.user.id, userId)
+            AlbumVisibility.PRIVATE -> false
+        }
     }
 
     @Transactional
@@ -60,12 +86,12 @@ class AlbumService(
             startDate = request.startDate,
             endDate = request.endDate,
             coverImageUrl = request.coverImageUrl,
-            isPublic = request.isPublic,
+            visibility = request.visibility,
             displayOrder = nextOrder
         )
 
         val savedAlbum = albumRepository.save(album)
-        return AlbumResponse.from(savedAlbum, 0)
+        return AlbumResponse.from(savedAlbum, 0, userId)
     }
 
     @Transactional
@@ -81,11 +107,11 @@ class AlbumService(
             startDate = request.startDate ?: album.startDate,
             endDate = request.endDate ?: album.endDate,
             coverImageUrl = request.coverImageUrl ?: album.coverImageUrl,
-            isPublic = request.isPublic
+            visibility = request.visibility
         )
 
         // Use @Formula calculated mediaCount
-        return AlbumResponse.from(album)
+        return AlbumResponse.from(album, userId)
     }
 
     @Transactional

@@ -151,4 +151,23 @@ interface TripMuseApi {
     suspend fun analyzeMedia(
         @Body request: AnalyzeMediaRequest
     ): Response<RecommendationResponse>
+
+    // Friends
+    @GET("friends")
+    suspend fun getFriends(): Response<FriendListResponse>
+
+    @GET("friends/search")
+    suspend fun searchUsers(
+        @Query("query") query: String
+    ): Response<UserSearchListResponse>
+
+    @POST("friends")
+    suspend fun addFriend(
+        @Body request: AddFriendRequest
+    ): Response<Friend>
+
+    @DELETE("friends/{friendId}")
+    suspend fun removeFriend(
+        @Path("friendId") friendId: Long
+    ): Response<Unit>
 }

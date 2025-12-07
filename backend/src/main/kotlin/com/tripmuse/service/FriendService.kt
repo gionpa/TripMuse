@@ -64,13 +64,24 @@ class FriendService(
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 친구로 등록된 사용자입니다")
         }
 
+        // 정방향 친구 관계 생성 (user -> friend)
         val friendship = Friendship(
             user = user,
             friend = friend,
             status = FriendshipStatus.ACCEPTED
         )
-
         val saved = friendshipRepository.save(friendship)
+
+        // 역방향 친구 관계 생성 (friend -> user) - 양방향 친구 관계
+        if (!friendshipRepository.existsByUserIdAndFriendId(request.friendId, userId)) {
+            val reverseFriendship = Friendship(
+                user = friend,
+                friend = user,
+                status = FriendshipStatus.ACCEPTED
+            )
+            friendshipRepository.save(reverseFriendship)
+        }
+
         return FriendResponse.from(saved)
     }
 
@@ -79,6 +90,13 @@ class FriendService(
         val friendship = friendshipRepository.findByUserIdAndFriendId(userId, friendId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "친구 관계를 찾을 수 없습니다") }
 
+        // 정방향 친구 관계 삭제 (user -> friend)
         friendshipRepository.delete(friendship)
+
+        // 역방향 친구 관계도 삭제 (friend -> user) - 양방향 친구 관계
+        friendshipRepository.findByUserIdAndFriendId(friendId, userId)
+            .ifPresent { reverseFriendship ->
+                friendshipRepository.delete(reverseFriendship)
+            }
     }
 }

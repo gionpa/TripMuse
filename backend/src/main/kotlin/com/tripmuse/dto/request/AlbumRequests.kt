@@ -1,5 +1,6 @@
 package com.tripmuse.dto.request
 
+import com.tripmuse.domain.AlbumVisibility
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import java.time.LocalDate
@@ -17,7 +18,7 @@ data class CreateAlbumRequest(
     val startDate: LocalDate? = null,
     val endDate: LocalDate? = null,
     val coverImageUrl: String? = null,
-    val isPublic: Boolean = false
+    val visibility: AlbumVisibility = AlbumVisibility.PRIVATE
 )
 
 data class UpdateAlbumRequest(
@@ -33,7 +34,7 @@ data class UpdateAlbumRequest(
     val startDate: LocalDate? = null,
     val endDate: LocalDate? = null,
     val coverImageUrl: String? = null,
-    val isPublic: Boolean = false
+    val visibility: AlbumVisibility = AlbumVisibility.PRIVATE
 )
 
 data class ReorderAlbumsRequest(
