@@ -37,8 +37,9 @@ class Album(
     var coverImageUrl: String? = null,
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    var visibility: AlbumVisibility = AlbumVisibility.PRIVATE,
+    @Column(nullable = true, length = 20)
+    @org.hibernate.annotations.ColumnDefault("'PRIVATE'")
+    var visibility: AlbumVisibility? = AlbumVisibility.PRIVATE,
 
     @Column(nullable = false)
     var displayOrder: Int = 0

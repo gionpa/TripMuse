@@ -63,7 +63,7 @@ class AlbumService(
         // Owner can always access
         if (album.user.id == userId) return true
 
-        return when (album.visibility) {
+        return when (album.visibility ?: AlbumVisibility.PRIVATE) {
             AlbumVisibility.PUBLIC -> true
             AlbumVisibility.FRIENDS_ONLY -> friendshipRepository.existsByUserIdAndFriendId(album.user.id, userId)
             AlbumVisibility.PRIVATE -> false

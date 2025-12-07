@@ -192,8 +192,9 @@ fun AlbumDetailScreen(
                             onFilterSelected = { viewModel.setFilter(it) }
                         )
 
-                        // Media grid
-                        if (uiState.mediaList.isEmpty()) {
+                        // Media grid - pendingMedia + mediaList를 함께 표시
+                        val displayList = uiState.displayMediaList
+                        if (displayList.isEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -214,7 +215,7 @@ fun AlbumDetailScreen(
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                items(uiState.mediaList) { media ->
+                                items(displayList) { media ->
                                     MediaThumbnail(
                                         media = media,
                                         isOwner = uiState.album?.isOwner == true,

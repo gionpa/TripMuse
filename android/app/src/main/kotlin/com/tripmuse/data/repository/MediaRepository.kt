@@ -26,6 +26,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 @Singleton
 class MediaRepository @Inject constructor(
@@ -34,6 +36,7 @@ class MediaRepository @Inject constructor(
     private val serverBaseUrl: String
 ) {
     private val uploadScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val uploadMutex = Mutex()
 
     fun uploadMediaInBackground(
         albumId: Long,
@@ -43,6 +46,49 @@ class MediaRepository @Inject constructor(
         uploadScope.launch {
             val result = uploadMedia(albumId, uri)
             onResult(result)
+        }
+    }
+
+    /**
+     * 여러 파일을 순차적으로 업로드합니다.
+     * Mutex를 사용하여 한 번에 하나의 파일만 업로드되도록 보장합니다.
+     * 서버 과부하를 방지하고 안정적인 업로드를 보장합니다.
+     */
+    fun uploadMediaSequentially(
+        albumId: Long,
+        uris: List<Uri>,
+        onEachResult: (index: Int, uri: Uri, Result<Media>) -> Unit = { _, _, _ -> },
+        onAllComplete: (successCount: Int, failCount: Int) -> Unit = { _, _ -> }
+    ) {
+        if (uris.isEmpty()) {
+            onAllComplete(0, 0)
+            return
+        }
+
+        uploadScope.launch {
+            var successCount = 0
+            var failCount = 0
+
+            uris.forEachIndexed { index, uri ->
+                uploadMutex.withLock {
+                    Log.d("MediaRepository", "Sequential upload ${index + 1}/${uris.size}: $uri")
+                    val result = uploadMedia(albumId, uri)
+
+                    result.onSuccess {
+                        successCount++
+                        Log.d("MediaRepository", "Upload ${index + 1}/${uris.size} succeeded")
+                    }
+                    result.onFailure { e ->
+                        failCount++
+                        Log.e("MediaRepository", "Upload ${index + 1}/${uris.size} failed: ${e.message}")
+                    }
+
+                    onEachResult(index, uri, result)
+                }
+            }
+
+            Log.d("MediaRepository", "All uploads complete: success=$successCount, fail=$failCount")
+            onAllComplete(successCount, failCount)
         }
     }
 

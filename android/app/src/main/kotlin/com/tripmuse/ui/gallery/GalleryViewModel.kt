@@ -161,7 +161,11 @@ class GalleryViewModel @Inject constructor(
         onComplete: () -> Unit,
         onUploadSuccess: (() -> Unit)? = null
     ) {
-        // 업로드를 백그라운드에서 시작하고 즉시 콜백을 호출해 앨범 화면으로 돌아가도록 처리
+        if (uris.isEmpty()) {
+            onComplete()
+            return
+        }
+
         // 권한 유지: ACTION_OPEN_DOCUMENT 결과에 대해 지속 권한을 획득
         uris.forEach { uri ->
             try {
@@ -174,24 +178,43 @@ class GalleryViewModel @Inject constructor(
             }
         }
 
-        uris.forEach { uri ->
-            mediaRepository.uploadMediaInBackground(albumId, uri) { result ->
+        Log.d("GalleryViewModel", "Starting sequential upload for ${uris.size} files")
+
+        // 순차 업로드 사용: 서버 과부하 방지 및 안정적인 업로드 보장
+        mediaRepository.uploadMediaSequentially(
+            albumId = albumId,
+            uris = uris,
+            onEachResult = { index, uri, result ->
                 result.onFailure { e ->
                     viewModelScope.launch {
+                        Log.e("GalleryViewModel", "Upload ${index + 1}/${uris.size} failed for $uri: ${e.message}")
                         _uiState.value = _uiState.value.copy(
-                            error = e.message ?: "Upload failed"
+                            error = "업로드 실패 (${index + 1}/${uris.size}): ${e.message}"
                         )
-                        Log.e("GalleryViewModel", "Upload failed for $uri", e)
                     }
                 }
                 result.onSuccess {
                     viewModelScope.launch {
+                        Log.d("GalleryViewModel", "Upload ${index + 1}/${uris.size} succeeded")
                         onUploadSuccess?.invoke()
                     }
                 }
+            },
+            onAllComplete = { successCount, failCount ->
+                viewModelScope.launch {
+                    Log.d("GalleryViewModel", "All uploads complete: success=$successCount, fail=$failCount")
+                    _uiState.value = _uiState.value.copy(isUploading = false)
+                    if (failCount > 0) {
+                        _uiState.value = _uiState.value.copy(
+                            error = "$failCount 개 파일 업로드 실패"
+                        )
+                    }
+                }
             }
-        }
-        _uiState.value = _uiState.value.copy(isUploading = false)
+        )
+
+        // 즉시 앨범 화면으로 돌아가도록 처리 (업로드는 백그라운드에서 계속 진행)
+        _uiState.value = _uiState.value.copy(isUploading = true)
         onComplete()
     }
 
