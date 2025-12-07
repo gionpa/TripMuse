@@ -19,8 +19,6 @@ import org.springframework.cache.annotation.Caching
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.transaction.support.TransactionSynchronization
-import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile
 import java.io.ByteArrayInputStream
 import java.time.LocalDateTime
@@ -34,7 +32,6 @@ class MediaService(
     private val commentRepository: CommentRepository,
     private val albumService: AlbumService,
     private val storageService: StorageService,
-    private val mediaUploadAsyncService: MediaUploadAsyncService,
     private val geocodingService: GeocodingService
 ) {
     private val logger = LoggerFactory.getLogger(MediaService::class.java)
@@ -136,18 +133,34 @@ class MediaService(
 
         val filePath = generateRelativePath(mediaType, file.originalFilename)
 
-        // For videos, stream directly to disk to avoid OOM
-        var alreadyStored = false
-        if (mediaType == MediaType.VIDEO) {
-            storageService.storeMultipartFileAtPath(file, filePath)
-            alreadyStored = true
+        // 동기식 업로드: 파일 저장 및 썸네일 생성을 바로 처리
+        // 이렇게 하면 API 응답 시점에 이미 COMPLETED 상태가 됨
+        var thumbnailPath: String? = null
+        try {
+            when (mediaType) {
+                MediaType.IMAGE -> {
+                    if (fileBytes != null) {
+                        storageService.storeImageBytesAtPath(fileBytes, filePath)
+                        thumbnailPath = storageService.generateImageThumbnail(filePath)
+                    }
+                }
+                MediaType.VIDEO -> {
+                    storageService.storeMultipartFileAtPath(file, filePath)
+                    thumbnailPath = storageService.generateVideoThumbnail(filePath)
+                }
+            }
+            logger.info("File stored and thumbnail generated: filePath=$filePath, thumbnailPath=$thumbnailPath")
+        } catch (e: Exception) {
+            logger.error("Failed to store file or generate thumbnail for ${file.originalFilename}", e)
+            // 썸네일 생성 실패해도 파일은 저장됨, 계속 진행
         }
 
         val media = Media(
             album = album,
             type = mediaType,
-            uploadStatus = UploadStatus.PROCESSING,
+            uploadStatus = UploadStatus.COMPLETED,  // 동기 처리로 바로 COMPLETED
             filePath = filePath,
+            thumbnailPath = thumbnailPath,
             originalFilename = file.originalFilename,
             fileSize = file.size,
             latitude = finalLatitude,
@@ -157,31 +170,11 @@ class MediaService(
 
         album.addMedia(media)
         val savedMedia = mediaRepository.save(media)
-        logger.info("Media saved id=${savedMedia.id}, type=${savedMedia.type}, filePath=${savedMedia.filePath}")
+        logger.info("Media saved id=${savedMedia.id}, type=${savedMedia.type}, status=${savedMedia.uploadStatus}, filePath=${savedMedia.filePath}, thumbnailPath=${savedMedia.thumbnailPath}")
 
-        // 트랜잭션 커밋 후 비동기로 파일 업로드 및 썸네일 생성
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
-                override fun afterCommit() {
-                    mediaUploadAsyncService.processUploadAsync(
-                        mediaId = savedMedia.id,
-                        albumId = albumId,
-                        mediaType = mediaType,
-                        fileBytes = fileBytes,
-                        originalFilename = file.originalFilename,
-                        alreadyStored = alreadyStored
-                    )
-                }
-            })
-        } else {
-            mediaUploadAsyncService.processUploadAsync(
-                mediaId = savedMedia.id,
-                albumId = albumId,
-                mediaType = mediaType,
-                fileBytes = fileBytes,
-                originalFilename = file.originalFilename,
-                alreadyStored = alreadyStored
-            )
+        // 앨범 커버 이미지가 없으면 설정
+        if (thumbnailPath != null) {
+            albumService.updateCoverImageIfEmpty(albumId, "/media/files/$thumbnailPath")
         }
 
         return MediaResponse.from(savedMedia)

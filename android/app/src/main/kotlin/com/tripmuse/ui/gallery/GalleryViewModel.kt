@@ -179,8 +179,10 @@ class GalleryViewModel @Inject constructor(
         }
 
         Log.d("GalleryViewModel", "Starting sequential upload for ${uris.size} files")
+        _uiState.value = _uiState.value.copy(isUploading = true)
 
         // 순차 업로드 사용: 서버 과부하 방지 및 안정적인 업로드 보장
+        // 모든 업로드 완료 후 네비게이션 (첫번째만 처리하고 나머지가 누락되는 문제 해결)
         mediaRepository.uploadMediaSequentially(
             albumId = albumId,
             uris = uris,
@@ -188,9 +190,6 @@ class GalleryViewModel @Inject constructor(
                 result.onFailure { e ->
                     viewModelScope.launch {
                         Log.e("GalleryViewModel", "Upload ${index + 1}/${uris.size} failed for $uri: ${e.message}")
-                        _uiState.value = _uiState.value.copy(
-                            error = "업로드 실패 (${index + 1}/${uris.size}): ${e.message}"
-                        )
                     }
                 }
                 result.onSuccess {
@@ -209,13 +208,12 @@ class GalleryViewModel @Inject constructor(
                             error = "$failCount 개 파일 업로드 실패"
                         )
                     }
+                    // 모든 업로드 완료 후 앨범 화면으로 돌아감
+                    Log.d("GalleryViewModel", "All uploads finished, navigating back to album")
+                    onComplete()
                 }
             }
         )
-
-        // 즉시 앨범 화면으로 돌아가도록 처리 (업로드는 백그라운드에서 계속 진행)
-        _uiState.value = _uiState.value.copy(isUploading = true)
-        onComplete()
     }
 
     fun clearError() {

@@ -23,7 +23,6 @@ fun GalleryScreen(
     val uiState by viewModel.uiState.collectAsState()
     var pickerLaunched by remember { mutableStateOf(false) }
     var pickerResultReceived by remember { mutableStateOf(false) }
-    var hasNavigatedBackAfterUpload by remember { mutableStateOf(false) }
 
     // Handle back press - return to album detail
     BackHandler(enabled = isPickerMode) {
@@ -40,20 +39,17 @@ fun GalleryScreen(
         pickerResultReceived = true
 
         if (uris.isNotEmpty() && albumId != null) {
-            Log.d("GalleryScreen", "Starting background upload for ${uris.size} items to album $albumId")
+            Log.d("GalleryScreen", "Starting upload for ${uris.size} items to album $albumId")
 
-            // 업로드 시작 - 서버가 PROCESSING 상태로 바로 미디어를 생성함
-            // 앨범 화면으로 복귀하면 refreshAlbumKey로 자동 갱신되고
+            // 업로드 시작 - 첫 번째 파일 업로드 완료 후 앨범 화면으로 복귀
+            // 나머지 파일은 백그라운드에서 계속 업로드됨
             // PROCESSING 상태인 미디어는 scheduleRefresh로 자동 폴링됨
             viewModel.uploadMediaFromUris(
                 albumId = albumId,
                 uris = uris,
                 onComplete = {
-                    Log.d("GalleryScreen", "Upload request sent, navigating back to album")
-                    if (!hasNavigatedBackAfterUpload) {
-                        hasNavigatedBackAfterUpload = true
-                        onMediaSelected?.invoke()
-                    }
+                    Log.d("GalleryScreen", "First upload complete, navigating back to album")
+                    onMediaSelected?.invoke()
                 },
                 onUploadSuccess = {
                     // 개별 업로드 성공 - 서버에서 PROCESSING→COMPLETED 처리됨
