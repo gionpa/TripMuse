@@ -192,8 +192,8 @@ fun AlbumDetailScreen(
                             onFilterSelected = { viewModel.setFilter(it) }
                         )
 
-                        // Media grid - pendingMedia + mediaList를 함께 표시
-                        val displayList = uiState.displayMediaList
+                        // Media grid
+                        val displayList = uiState.mediaList
                         if (displayList.isEmpty()) {
                             Box(
                                 modifier = Modifier

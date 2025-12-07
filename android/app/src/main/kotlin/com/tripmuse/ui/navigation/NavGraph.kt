@@ -47,7 +47,6 @@ import com.tripmuse.ui.album.AlbumCreateScreen
 import com.tripmuse.ui.album.AlbumDetailScreen
 import com.tripmuse.ui.album.AlbumEditScreen
 import com.tripmuse.ui.gallery.GalleryScreen
-import com.tripmuse.ui.gallery.SelectedMediaInfo
 import com.tripmuse.ui.auth.LoginScreen
 import com.tripmuse.ui.home.HomeScreen
 import com.tripmuse.ui.media.MediaDetailScreen
@@ -354,30 +353,14 @@ fun TripMuseNavHost(
                 arguments = listOf(navArgument("albumId") { type = NavType.LongType })
             ) { backStackEntry ->
                 val albumId = backStackEntry.arguments?.getLong("albumId") ?: return@composable
-                // 앨범 화면의 ViewModel을 직접 참조해 업로드 성공 시 즉시 새로고침
-                val parentEntry = navController.previousBackStackEntry
-                val parentAlbumViewModel: AlbumViewModel? = parentEntry?.let { hiltViewModel(it) }
 
                 GalleryScreen(
                     isPickerMode = true,
                     albumId = albumId,
                     onMediaSelected = {
+                        // 업로드 완료 후 앨범 화면으로 복귀 시 refreshAlbumKey 설정
+                        navController.previousBackStackEntry?.savedStateHandle?.set("refreshAlbumKey", System.currentTimeMillis())
                         navController.popBackStack()
-                    },
-                    onUploadSuccess = {
-                        // 업로드 성공 시 pending 미디어 하나 제거하고 서버에서 최신 데이터 로드
-                        parentAlbumViewModel?.removePendingMediaAndRefresh(1)
-                    },
-                    onPendingMediaAdded = { selectedMediaInfoList ->
-                        // 선택된 파일 정보를 pending 미디어로 즉시 추가
-                        val pendingItems = selectedMediaInfoList.map { info ->
-                            AlbumViewModel.PendingMediaInfo(
-                                uri = info.uri,
-                                filename = info.filename,
-                                isVideo = info.isVideo
-                            )
-                        }
-                        parentAlbumViewModel?.addPendingMedia(pendingItems)
                     }
                 )
             }

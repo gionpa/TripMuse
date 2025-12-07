@@ -1,6 +1,5 @@
 package com.tripmuse.ui.album
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tripmuse.data.model.AlbumDetail
@@ -17,24 +16,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
-
-// 임시 ID 생성을 위한 카운터 (음수로 시작하여 서버 ID와 충돌 방지)
-private val pendingIdCounter = AtomicLong(-1L)
 
 data class AlbumDetailUiState(
     val isLoading: Boolean = false,
     val album: AlbumDetail? = null,
     val mediaList: List<Media> = emptyList(),
-    val pendingMedia: List<Media> = emptyList(), // 업로드 대기중인 로컬 미디어
     val selectedFilter: MediaFilter = MediaFilter.ALL,
     val error: String? = null
-) {
-    // 표시용: pending + 실제 미디어 합쳐서 반환
-    val displayMediaList: List<Media>
-        get() = pendingMedia + mediaList
-}
+)
 
 enum class MediaFilter {
     ALL, IMAGE, VIDEO
@@ -196,70 +186,5 @@ class AlbumViewModel @Inject constructor(
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
-    }
-
-    /**
-     * 업로드 시작 시 pending 미디어를 추가합니다.
-     * 로컬 URI에서 파일명과 타입을 추출하여 임시 Media 객체를 생성합니다.
-     */
-    data class PendingMediaInfo(
-        val uri: Uri,
-        val filename: String,
-        val isVideo: Boolean
-    )
-
-    fun addPendingMedia(pendingItems: List<PendingMediaInfo>) {
-        val currentTime = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.getDefault())
-            .format(java.util.Date())
-
-        val newPendingMedia = pendingItems.map { item ->
-            Media(
-                id = pendingIdCounter.getAndDecrement(),
-                type = if (item.isVideo) MediaType.VIDEO else MediaType.IMAGE,
-                uploadStatus = UploadStatus.PROCESSING,
-                filePath = item.uri.toString(),
-                fileUrl = item.uri.toString(), // 로컬 URI를 임시로 사용
-                thumbnailPath = null,
-                thumbnailUrl = item.uri.toString(), // 로컬 이미지 표시용
-                originalFilename = item.filename,
-                fileSize = null,
-                latitude = null,
-                longitude = null,
-                locationName = null,
-                takenAt = null,
-                isCover = false,
-                createdAt = currentTime
-            )
-        }
-
-        _uiState.value = _uiState.value.copy(
-            pendingMedia = _uiState.value.pendingMedia + newPendingMedia
-        )
-    }
-
-    /**
-     * 업로드 완료/실패 시 pending 미디어를 제거하고 서버에서 최신 데이터를 로드합니다.
-     */
-    fun removePendingMediaAndRefresh(count: Int = 1) {
-        val currentPending = _uiState.value.pendingMedia
-        if (currentPending.isNotEmpty()) {
-            // 가장 오래된 pending 항목부터 제거 (FIFO)
-            val remaining = if (count >= currentPending.size) {
-                emptyList()
-            } else {
-                currentPending.drop(count)
-            }
-            _uiState.value = _uiState.value.copy(pendingMedia = remaining)
-        }
-
-        // 서버에서 최신 데이터 로드
-        _uiState.value.album?.let { loadAlbum(it.id) }
-    }
-
-    /**
-     * 모든 pending 미디어를 제거합니다.
-     */
-    fun clearAllPendingMedia() {
-        _uiState.value = _uiState.value.copy(pendingMedia = emptyList())
     }
 }

@@ -1,7 +1,6 @@
 package com.tripmuse.ui.gallery
 
 import android.net.Uri
-import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -11,27 +10,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-
-// 선택된 파일 정보를 담는 데이터 클래스
-data class SelectedMediaInfo(
-    val uri: Uri,
-    val filename: String,
-    val isVideo: Boolean
-)
 
 @Composable
 fun GalleryScreen(
     isPickerMode: Boolean = false,
     albumId: Long? = null,
     onMediaSelected: (() -> Unit)? = null,
-    onUploadSuccess: (() -> Unit)? = null,
-    onPendingMediaAdded: ((List<SelectedMediaInfo>) -> Unit)? = null,
     viewModel: GalleryViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     var pickerLaunched by remember { mutableStateOf(false) }
     var pickerResultReceived by remember { mutableStateOf(false) }
@@ -54,49 +42,22 @@ fun GalleryScreen(
         if (uris.isNotEmpty() && albumId != null) {
             Log.d("GalleryScreen", "Starting background upload for ${uris.size} items to album $albumId")
 
-            // 선택된 파일 정보 추출하여 pending 미디어로 즉시 표시
-            val selectedMediaInfoList = uris.mapNotNull { uri ->
-                try {
-                    val mimeType = context.contentResolver.getType(uri)
-                    val isVideo = mimeType?.startsWith("video") == true
-                    val filename = context.contentResolver.query(
-                        uri,
-                        arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
-                        null, null, null
-                    )?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            cursor.getString(0)
-                        } else null
-                    } ?: "media_${System.currentTimeMillis()}"
-
-                    SelectedMediaInfo(uri, filename, isVideo)
-                } catch (e: Exception) {
-                    Log.e("GalleryScreen", "Failed to extract media info for $uri", e)
-                    null
-                }
-            }
-
-            // pending 미디어 추가 콜백 호출 (UI에 즉시 표시)
-            if (selectedMediaInfoList.isNotEmpty()) {
-                onPendingMediaAdded?.invoke(selectedMediaInfoList)
-            }
-
-            // 업로드 시작 후 즉시 앨범 화면으로 복귀
-            // 업로드는 백그라운드에서 계속 진행됨
+            // 업로드 시작 - 서버가 PROCESSING 상태로 바로 미디어를 생성함
+            // 앨범 화면으로 복귀하면 refreshAlbumKey로 자동 갱신되고
+            // PROCESSING 상태인 미디어는 scheduleRefresh로 자동 폴링됨
             viewModel.uploadMediaFromUris(
                 albumId = albumId,
                 uris = uris,
                 onComplete = {
-                    // 즉시 앨범 화면으로 복귀
-                    Log.d("GalleryScreen", "Upload started, navigating back to album immediately")
+                    Log.d("GalleryScreen", "Upload request sent, navigating back to album")
                     if (!hasNavigatedBackAfterUpload) {
                         hasNavigatedBackAfterUpload = true
                         onMediaSelected?.invoke()
                     }
                 },
                 onUploadSuccess = {
-                    // 각 업로드 성공 시 앨범 리스트 갱신 트리거
-                    onUploadSuccess?.invoke()
+                    // 개별 업로드 성공 - 서버에서 PROCESSING→COMPLETED 처리됨
+                    Log.d("GalleryScreen", "Individual upload completed on server")
                 }
             )
         } else {
