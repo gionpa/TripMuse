@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TripMuse</string>
+
+    <!-- Naver Login -->
+    <string name="naver_client_id">BmmDwGgBWtvE2gJFyyYu</string>
+    <string name="naver_client_secret">24vb3KeX5n</string>
+    <string name="naver_client_name">TripMuse</string>
 </resources>

@@ -120,6 +120,9 @@ dependencies {
     // ExifInterface for reading photo metadata
     implementation("androidx.exifinterface:exifinterface:1.3.7")
 
+    // Naver Login SDK
+    implementation("com.navercorp.nid:oauth:5.10.0")
+
     // Test
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

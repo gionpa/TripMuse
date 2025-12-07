@@ -95,7 +95,8 @@ val bottomNavItems = listOf(
 @Composable
 fun TripMuseNavHost(
     authEventManager: AuthEventManager,
-    onExitApp: () -> Unit = {}
+    onExitApp: () -> Unit = {},
+    onNaverLoginClick: ((callback: (String?) -> Unit) -> Unit)? = null
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -238,12 +239,32 @@ fun TripMuseNavHost(
             }
 
             composable(Screen.Login.route) {
+                val viewModel: com.tripmuse.ui.auth.AuthViewModel = hiltViewModel()
                 LoginScreen(
                     onAuthSuccess = {
                         navController.navigate(Screen.Home.route) {
                             popUpTo(Screen.Login.route) { inclusive = true }
                         }
-                    }
+                    },
+                    onNaverLoginClick = if (onNaverLoginClick != null) {
+                        {
+                            android.util.Log.d("NaverLogin", "NavGraph: onNaverLoginClick triggered")
+                            onNaverLoginClick { accessToken ->
+                                android.util.Log.d("NaverLogin", "NavGraph: callback received, accessToken: ${accessToken?.take(20)}...")
+                                if (accessToken != null) {
+                                    viewModel.authenticateNaver(accessToken) {
+                                        navController.navigate(Screen.Home.route) {
+                                            popUpTo(Screen.Login.route) { inclusive = true }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        android.util.Log.d("NaverLogin", "NavGraph: onNaverLoginClick is null!")
+                        null
+                    },
+                    viewModel = viewModel
                 )
             }
 

@@ -204,7 +204,10 @@ fun LoginScreen(
                 }
 
                 Button(
-                    onClick = { onNaverLoginClick?.invoke() },
+                    onClick = {
+                        android.util.Log.d("NaverLogin", "LoginScreen: Button clicked, onNaverLoginClick is ${if (onNaverLoginClick != null) "NOT NULL" else "NULL"}")
+                        onNaverLoginClick?.invoke()
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
