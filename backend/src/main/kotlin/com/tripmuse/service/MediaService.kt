@@ -114,6 +114,18 @@ class MediaService(
         }
         logger.info("Upload request albumId=$albumId, userId=$userId, filename='${file.originalFilename}', contentType=$contentType, resolvedType=$mediaType")
 
+        // 중복 체크: 같은 앨범에 파일명+파일크기가 동일한 미디어가 있으면 업로드 거부
+        val originalFilename = file.originalFilename
+        if (originalFilename != null && file.size > 0) {
+            val isDuplicate = mediaRepository.existsByAlbumIdAndOriginalFilenameAndFileSize(
+                albumId, originalFilename, file.size
+            )
+            if (isDuplicate) {
+                logger.info("Duplicate media detected: albumId=$albumId, filename=$originalFilename, size=${file.size}")
+                throw BadRequestException("이미 같은 사진이 앨범에 존재합니다: $originalFilename")
+            }
+        }
+
         // Extract metadata (images only) using bytes
         val fileBytes: ByteArray? = if (mediaType == MediaType.IMAGE) file.bytes else null
         val fileMetadata = if (mediaType == MediaType.IMAGE && fileBytes != null) {
