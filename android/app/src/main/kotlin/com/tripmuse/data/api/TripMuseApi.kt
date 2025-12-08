@@ -37,6 +37,15 @@ interface TripMuseApi {
     @GET("users/me")
     suspend fun getCurrentUser(): Response<User>
 
+    @Multipart
+    @POST("users/me/profile-image")
+    suspend fun uploadProfileImage(
+        @Part file: MultipartBody.Part
+    ): Response<User>
+
+    @DELETE("users/me/profile-image")
+    suspend fun deleteProfileImage(): Response<User>
+
     // Albums
     @GET("albums")
     suspend fun getAlbums(): Response<AlbumListResponse>

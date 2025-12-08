@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -13,6 +14,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -24,6 +28,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -40,13 +45,16 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.Comment
 import com.tripmuse.data.model.MediaType
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MediaDetailScreen(
-    mediaId: Long,
+    initialMediaId: Long,
+    mediaIds: List<Long>,
     onBackClick: () -> Unit,
     viewModel: MediaViewModel = hiltViewModel()
 ) {
@@ -54,8 +62,29 @@ fun MediaDetailScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(mediaId) {
-        viewModel.loadMedia(mediaId)
+    // Find initial page index
+    val initialPage = remember(initialMediaId, mediaIds) {
+        mediaIds.indexOf(initialMediaId).coerceAtLeast(0)
+    }
+
+    // HorizontalPager state
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { mediaIds.size }
+    )
+
+    // Current media ID based on pager position
+    val currentMediaId = remember(pagerState.currentPage, mediaIds) {
+        if (mediaIds.isNotEmpty() && pagerState.currentPage < mediaIds.size) {
+            mediaIds[pagerState.currentPage]
+        } else {
+            initialMediaId
+        }
+    }
+
+    // Load media when page changes
+    LaunchedEffect(currentMediaId) {
+        viewModel.loadMedia(currentMediaId)
     }
 
     // 미디어 삭제 성공 시 뒤로가기
@@ -74,7 +103,7 @@ fun MediaDetailScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteMedia(mediaId)
+                        viewModel.deleteMedia(currentMediaId)
                         showDeleteDialog = false
                     },
                     colors = ButtonDefaults.textButtonColors(
@@ -95,7 +124,11 @@ fun MediaDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { },
+                title = {
+                    if (mediaIds.size > 1) {
+                        Text("${pagerState.currentPage + 1} / ${mediaIds.size}")
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
@@ -126,92 +159,123 @@ fun MediaDetailScreen(
             )
         }
     ) { paddingValues ->
-        Box(
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(paddingValues),
+            key = { page -> mediaIds.getOrElse(page) { page.toLong() } }
+        ) { page ->
+            val pageMediaId = mediaIds.getOrElse(page) { initialMediaId }
+            MediaDetailPageContent(
+                mediaId = pageMediaId,
+                isCurrentPage = page == pagerState.currentPage,
+                uiState = uiState,
+                viewModel = viewModel
+            )
+        }
+    }
+}
+
+@Composable
+private fun MediaDetailPageContent(
+    mediaId: Long,
+    isCurrentPage: Boolean,
+    uiState: MediaDetailUiState,
+    viewModel: MediaViewModel
+) {
+    // Only show content for the current page to avoid loading all at once
+    if (!isCurrentPage) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            when {
-                uiState.isLoading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        when {
+            uiState.isLoading -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+            uiState.error != null -> {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = uiState.error ?: "오류가 발생했습니다",
+                        color = MaterialTheme.colorScheme.error
                     )
-                }
-                uiState.error != null -> {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = uiState.error ?: "오류가 발생했습니다",
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { viewModel.loadMedia(mediaId) }) {
-                            Text("다시 시도")
-                        }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { viewModel.loadMedia(mediaId) }) {
+                        Text("다시 시도")
                     }
                 }
-                uiState.media != null -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        // Media viewer
-                        item {
-                            MediaViewer(
-                                fileUrl = uiState.media!!.fileUrl,
-                                mediaType = uiState.media!!.type
-                            )
-                        }
+            }
+            uiState.media != null -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Media viewer
+                    item {
+                        MediaViewer(
+                            fileUrl = uiState.media!!.fileUrl,
+                            mediaType = uiState.media!!.type
+                        )
+                    }
 
-                        // Metadata
-                        item {
-                            MediaMetadataSection(media = uiState.media!!)
-                        }
+                    // Metadata
+                    item {
+                        MediaMetadataSection(media = uiState.media!!)
+                    }
 
-                        // Memo section
-                        item {
-                            MemoSection(
-                                memo = uiState.media!!.memo?.content,
-                                isEditing = uiState.isEditingMemo,
-                                isSaving = uiState.isSavingMemo,
-                                editContent = uiState.memoContent,
-                                onEditClick = { viewModel.setEditingMemo(true) },
-                                onCancelClick = { viewModel.setEditingMemo(false) },
-                                onContentChange = { viewModel.updateMemoContent(it) },
-                                onSaveClick = { viewModel.saveMemo() }
-                            )
-                        }
+                    // Memo section
+                    item {
+                        MemoSection(
+                            memo = uiState.media!!.memo?.content,
+                            isEditing = uiState.isEditingMemo,
+                            isSaving = uiState.isSavingMemo,
+                            editContent = uiState.memoContent,
+                            onEditClick = { viewModel.setEditingMemo(true) },
+                            onCancelClick = { viewModel.setEditingMemo(false) },
+                            onContentChange = { viewModel.updateMemoContent(it) },
+                            onSaveClick = { viewModel.saveMemo() }
+                        )
+                    }
 
-                        // Comments header
-                        item {
-                            Text(
-                                text = "댓글 (${uiState.comments.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(16.dp)
-                            )
-                        }
+                    // Comments header
+                    item {
+                        Text(
+                            text = "댓글 (${uiState.comments.size})",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
 
-                        // Comments list
-                        items(uiState.comments) { comment ->
-                            CommentItem(
-                                comment = comment,
-                                onDeleteClick = { viewModel.deleteComment(comment.id) }
-                            )
-                        }
+                    // Comments list
+                    items(uiState.comments) { comment ->
+                        CommentItem(
+                            comment = comment,
+                            onDeleteClick = { viewModel.deleteComment(comment.id) }
+                        )
+                    }
 
-                        // Comment input
-                        item {
-                            CommentInput(
-                                value = uiState.commentInput,
-                                onValueChange = { viewModel.updateCommentInput(it) },
-                                onSendClick = { viewModel.postComment() }
-                            )
-                        }
+                    // Comment input
+                    item {
+                        CommentInput(
+                            value = uiState.commentInput,
+                            onValueChange = { viewModel.updateCommentInput(it) },
+                            onSendClick = { viewModel.postComment() }
+                        )
+                    }
 
-                        item {
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
@@ -696,6 +760,7 @@ fun CommentItem(
     comment: Comment,
     onDeleteClick: () -> Unit
 ) {
+    val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
 
     Row(
@@ -704,18 +769,32 @@ fun CommentItem(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Top
     ) {
-        // User avatar placeholder
-        Surface(
-            modifier = Modifier.size(32.dp),
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.primaryContainer
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = comment.user.nickname.take(1),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+        // User avatar with profile image support
+        if (comment.user.profileImageUrl != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(ApiModule.BASE_URL.trimEnd('/') + comment.user.profileImageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "프로필 이미지",
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Surface(
+                modifier = Modifier.size(32.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = comment.user.nickname.take(1),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
         }
 

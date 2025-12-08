@@ -39,7 +39,7 @@ import com.tripmuse.data.model.UploadStatus
 fun AlbumDetailScreen(
     albumId: Long,
     onBackClick: () -> Unit,
-    onMediaClick: (Long) -> Unit,
+    onMediaClick: (Long, List<Long>) -> Unit,
     onAddMediaClick: (Long) -> Unit,
     onEditAlbumClick: (Long) -> Unit = {},
     viewModel: AlbumViewModel = hiltViewModel()
@@ -219,7 +219,7 @@ fun AlbumDetailScreen(
                                     MediaThumbnail(
                                         media = media,
                                         isOwner = uiState.album?.isOwner == true,
-                                        onClick = { onMediaClick(media.id) },
+                                        onClick = { onMediaClick(media.id, displayList.map { it.id }) },
                                         onSetCover = { viewModel.setCoverImage(media.id) },
                                         onDelete = { viewModel.deleteMedia(media.id) }
                                     )

@@ -3,6 +3,7 @@ package com.tripmuse.ui.friend
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -11,10 +12,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.Friend
 import com.tripmuse.data.model.UserSearchResult
 
@@ -179,6 +186,8 @@ fun SearchResultItem(
     user: UserSearchResult,
     onAddFriend: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Surface(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -189,17 +198,31 @@ fun SearchResultItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Avatar
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.secondaryContainer
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = user.nickname.take(1),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+            if (user.profileImageUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(ApiModule.BASE_URL.trimEnd('/') + user.profileImageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "프로필 이미지",
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = user.nickname.take(1),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                 }
             }
 
@@ -244,6 +267,7 @@ fun FriendItem(
     friend: Friend,
     onRemoveFriend: () -> Unit
 ) {
+    val context = LocalContext.current
     var showRemoveDialog by remember { mutableStateOf(false) }
 
     if (showRemoveDialog) {
@@ -279,17 +303,31 @@ fun FriendItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Avatar
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = friend.nickname.take(1),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+            if (friend.profileImageUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(ApiModule.BASE_URL.trimEnd('/') + friend.profileImageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "프로필 이미지",
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = friend.nickname.take(1),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
 

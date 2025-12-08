@@ -323,7 +323,9 @@ fun TripMuseNavHost(
                 AlbumDetailScreen(
                     albumId = albumId,
                     onBackClick = { navController.popBackStack() },
-                    onMediaClick = { mediaId ->
+                    onMediaClick = { mediaId, allMediaIds ->
+                        // Pass media ID list via savedStateHandle
+                        navController.currentBackStackEntry?.savedStateHandle?.set("mediaIds", allMediaIds.toLongArray())
                         navController.navigate(Screen.MediaDetail.createRoute(mediaId))
                     },
                     onAddMediaClick = { id ->
@@ -363,8 +365,11 @@ fun TripMuseNavHost(
                 arguments = listOf(navArgument("mediaId") { type = NavType.LongType })
             ) { backStackEntry ->
                 val mediaId = backStackEntry.arguments?.getLong("mediaId") ?: return@composable
+                // Retrieve media IDs from previous screen's savedStateHandle
+                val mediaIds = navController.previousBackStackEntry?.savedStateHandle?.get<LongArray>("mediaIds")?.toList() ?: listOf(mediaId)
                 MediaDetailScreen(
-                    mediaId = mediaId,
+                    initialMediaId = mediaId,
+                    mediaIds = mediaIds,
                     onBackClick = { navController.popBackStack() }
                 )
             }
