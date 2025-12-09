@@ -51,7 +51,6 @@ class FriendViewModel @Inject constructor(
                         isLoading = false,
                         friends = response.friends
                     )
-                    loadInvitations()
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
@@ -148,11 +147,29 @@ class FriendViewModel @Inject constructor(
         viewModelScope.launch {
             friendRepository.acceptInvitation(invitationId)
                 .onSuccess {
-                    _uiState.value = _uiState.value.copy(
-                        successMessage = "초대를 수락했습니다"
-                    )
-                    loadFriends()
-                    loadInvitations()
+                    // 초대 수락 후 친구 목록과 초대 목록을 순차적으로 새로고침
+                    val friendsResult = friendRepository.getFriends()
+                    val invitationsResult = friendRepository.getInvitations()
+
+                    friendsResult.onSuccess { friendsResponse ->
+                        invitationsResult.onSuccess { invitationsResponse ->
+                            _uiState.value = _uiState.value.copy(
+                                successMessage = "초대를 수락했습니다",
+                                friends = friendsResponse.friends,
+                                invitations = invitationsResponse.invitations
+                            )
+                        }.onFailure {
+                            _uiState.value = _uiState.value.copy(
+                                successMessage = "초대를 수락했습니다",
+                                friends = friendsResponse.friends
+                            )
+                        }
+                    }.onFailure { e ->
+                        _uiState.value = _uiState.value.copy(
+                            successMessage = "초대를 수락했습니다",
+                            error = "친구 목록 새로고침 실패: ${e.message}"
+                        )
+                    }
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(error = e.message)
