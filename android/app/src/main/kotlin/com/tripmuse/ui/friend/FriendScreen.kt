@@ -145,38 +145,12 @@ fun FriendScreen(
                     ) {
                         CircularProgressIndicator()
                     }
-                } else if (uiState.friends.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                Icons.Default.PersonAdd,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "등록된 친구가 없습니다",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "이메일이나 닉네임으로 친구를 검색해보세요",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
+                        // Always show invitations section if there are any
                         if (uiState.invitations.isNotEmpty()) {
                             item {
                                 InvitationSection(
@@ -186,19 +160,55 @@ fun FriendScreen(
                                 )
                             }
                         }
-                        item {
-                            Text(
-                                text = "내 친구 ${uiState.friends.size}명",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        items(uiState.friends) { friend ->
-                            FriendItem(
-                                friend = friend,
-                                onRemoveFriend = { viewModel.removeFriend(friend.id) }
-                            )
+
+                        if (uiState.friends.isEmpty()) {
+                            // Empty state for no friends
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 48.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            Icons.Default.PersonAdd,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(64.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "등록된 친구가 없습니다",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "이메일이나 닉네임으로 친구를 검색해보세요",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            // Friend list header and items
+                            item {
+                                Text(
+                                    text = "내 친구 ${uiState.friends.size}명",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            items(uiState.friends) { friend ->
+                                FriendItem(
+                                    friend = friend,
+                                    onRemoveFriend = { viewModel.removeFriend(friend.id) }
+                                )
+                            }
                         }
                     }
                 }

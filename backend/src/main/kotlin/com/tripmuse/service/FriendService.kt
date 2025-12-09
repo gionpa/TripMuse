@@ -158,8 +158,15 @@ class FriendService(
         invitation.status = FriendshipStatus.ACCEPTED
         friendshipRepository.save(invitation)
 
-        // 역방향 친구 관계 생성
-        if (!friendshipRepository.existsByUserIdAndFriendId(receiver.id, requester.id)) {
+        // 역방향 친구 관계 보장 (없으면 생성, 있으면 ACCEPTED로 승격)
+        val reverseOpt = friendshipRepository.findByUserIdAndFriendId(receiver.id, requester.id)
+        if (reverseOpt.isPresent) {
+            val reverse = reverseOpt.get()
+            if (reverse.status != FriendshipStatus.ACCEPTED) {
+                reverse.status = FriendshipStatus.ACCEPTED
+                friendshipRepository.save(reverse)
+            }
+        } else {
             friendshipRepository.save(
                 Friendship(
                     user = receiver,
