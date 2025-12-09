@@ -6,7 +6,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,6 +30,14 @@ class TokenManager @Inject constructor(
         prefs[keyRefresh]
     }
 
+    fun getAccessTokenSync(): String? = runBlocking {
+        accessToken.firstOrNull()
+    }
+
+    fun getRefreshTokenSync(): String? = runBlocking {
+        refreshToken.firstOrNull()
+    }
+
     suspend fun saveTokens(access: String, refresh: String) {
         context.dataStore.edit { prefs ->
             prefs[keyAccess] = access
@@ -35,10 +45,22 @@ class TokenManager @Inject constructor(
         }
     }
 
+    fun saveTokensSync(access: String, refresh: String) {
+        runBlocking {
+            saveTokens(access, refresh)
+        }
+    }
+
     suspend fun clear() {
         context.dataStore.edit { prefs ->
             prefs.remove(keyAccess)
             prefs.remove(keyRefresh)
+        }
+    }
+
+    fun clearSync() {
+        runBlocking {
+            clear()
         }
     }
 }
