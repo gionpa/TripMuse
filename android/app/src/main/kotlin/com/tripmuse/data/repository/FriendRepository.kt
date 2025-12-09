@@ -4,6 +4,7 @@ import com.tripmuse.data.api.TripMuseApi
 import com.tripmuse.data.model.AddFriendRequest
 import com.tripmuse.data.model.Friend
 import com.tripmuse.data.model.FriendListResponse
+import com.tripmuse.data.model.InvitationListResponse
 import com.tripmuse.data.model.UserSearchListResponse
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -53,6 +54,39 @@ class FriendRepository @Inject constructor(
                 }
                 Result.failure(Exception(errorMessage))
             }
+        } catch (e: Exception) {
+            Result.failure(Exception("네트워크 오류: ${e.message}"))
+        }
+    }
+
+    suspend fun getInvitations(): Result<InvitationListResponse> {
+        return try {
+            val response = api.getInvitations()
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("초대 목록을 불러올 수 없습니다"))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("네트워크 오류: ${e.message}"))
+        }
+    }
+
+    suspend fun acceptInvitation(invitationId: Long): Result<Unit> {
+        return try {
+            val response = api.acceptInvitation(invitationId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("초대를 수락할 수 없습니다"))
+        } catch (e: Exception) {
+            Result.failure(Exception("네트워크 오류: ${e.message}"))
+        }
+    }
+
+    suspend fun rejectInvitation(invitationId: Long): Result<Unit> {
+        return try {
+            val response = api.rejectInvitation(invitationId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("초대를 거절할 수 없습니다"))
         } catch (e: Exception) {
             Result.failure(Exception("네트워크 오류: ${e.message}"))
         }

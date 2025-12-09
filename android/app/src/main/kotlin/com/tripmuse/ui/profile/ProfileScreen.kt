@@ -8,13 +8,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -48,7 +50,10 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("프로필") }
+                title = { Text("프로필") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                )
             )
         }
     ) { paddingValues ->
@@ -170,33 +175,28 @@ fun ProfileScreen(
 
             HorizontalDivider()
 
-            // Menu items
-            ProfileMenuItem(
+            // Menu items (card style)
+            ProfileMenuCard(
                 icon = Icons.Default.Settings,
                 title = "설정",
                 onClick = { /* TODO */ }
             )
-            ProfileMenuItem(
+            ProfileMenuCard(
                 icon = Icons.Default.Notifications,
                 title = "알림 설정",
                 onClick = { /* TODO */ }
             )
-            ProfileMenuItem(
+            ProfileMenuCard(
                 icon = Icons.Default.Storage,
                 title = "저장공간 관리",
                 onClick = { /* TODO */ }
             )
-            ProfileMenuItem(
-                icon = Icons.AutoMirrored.Filled.Help,
-                title = "도움말",
-                onClick = { /* TODO */ }
-            )
-            ProfileMenuItem(
+            ProfileMenuCard(
                 icon = Icons.Default.Info,
                 title = "앱 정보",
                 onClick = { /* TODO */ }
             )
-            ProfileMenuItem(
+            ProfileMenuCard(
                 icon = Icons.Default.ExitToApp,
                 title = "로그아웃",
                 onClick = { viewModel.logout(onLogout) }
@@ -277,25 +277,40 @@ fun StatItem(
 }
 
 @Composable
-fun ProfileMenuItem(
+fun ProfileMenuCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     onClick: () -> Unit
 ) {
+    val shape = RoundedCornerShape(14.dp)
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .shadow(4.dp, shape),
+        shape = shape,
+        color = MaterialTheme.colorScheme.surface
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .background(
+                    brush = Brush.horizontalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                        )
+                    ),
+                    shape = shape
+                )
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(16.dp))
             Text(

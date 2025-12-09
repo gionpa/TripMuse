@@ -18,7 +18,10 @@ data class UserSearchResult(
     val email: String,
     val nickname: String,
     val profileImageUrl: String?,
-    val isFriend: Boolean
+    val isFriend: Boolean,
+    val invitedByMe: Boolean = false,
+    val invitedMe: Boolean = false,
+    val invitationId: Long? = null
 )
 
 data class UserSearchListResponse(
@@ -28,4 +31,16 @@ data class UserSearchListResponse(
 
 data class AddFriendRequest(
     val friendId: Long
+)
+
+data class Invitation(
+    val invitationId: Long,
+    val fromUserId: Long,
+    val fromEmail: String,
+    val fromNickname: String,
+    val fromProfileImageUrl: String?
+)
+
+data class InvitationListResponse(
+    val invitations: List<Invitation>
 )

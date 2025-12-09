@@ -18,9 +18,12 @@ import javax.inject.Inject
 
 data class AlbumDetailUiState(
     val isLoading: Boolean = false,
+    val isLoadingMore: Boolean = false,
     val album: AlbumDetail? = null,
     val mediaList: List<Media> = emptyList(),
     val selectedFilter: MediaFilter = MediaFilter.ALL,
+    val page: Int = 0,
+    val hasMore: Boolean = true,
     val error: String? = null
 )
 
@@ -43,12 +46,18 @@ class AlbumViewModel @Inject constructor(
         loadMediaJob?.cancel()
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                error = null,
+                mediaList = emptyList(),
+                page = 0,
+                hasMore = true
+            )
 
             albumRepository.getAlbumDetail(albumId)
                 .onSuccess { album ->
                     _uiState.value = _uiState.value.copy(album = album)
-                    loadMedia(albumId)
+                    loadMediaPage(albumId, page = 0, append = false)
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
@@ -59,7 +68,7 @@ class AlbumViewModel @Inject constructor(
         }
     }
 
-    private fun loadMedia(albumId: Long) {
+    private fun loadMediaPage(albumId: Long, page: Int, append: Boolean) {
         // Cancel previous media loading job to prevent concurrent access
         loadMediaJob?.cancel()
 
@@ -70,12 +79,33 @@ class AlbumViewModel @Inject constructor(
                 MediaFilter.VIDEO -> MediaType.VIDEO
             }
 
+            val isFirstPage = page == 0
+            _uiState.value = _uiState.value.copy(
+                isLoading = isFirstPage,
+                isLoadingMore = !isFirstPage && append
+            )
+
             try {
-                mediaRepository.getMediaByAlbum(albumId, mediaType)
+                mediaRepository.getMediaByAlbum(
+                    albumId = albumId,
+                    type = mediaType,
+                    page = page,
+                    size = 12
+                )
                     .onSuccess { mediaList ->
+                        val newList = if (append) {
+                            _uiState.value.mediaList + mediaList
+                        } else {
+                            mediaList
+                        }
+                        val hasMore = mediaList.size == 12
+
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
-                            mediaList = mediaList
+                            isLoadingMore = false,
+                            mediaList = newList,
+                            page = page,
+                            hasMore = hasMore
                         )
                     }
                     .onFailure { e ->
@@ -83,6 +113,7 @@ class AlbumViewModel @Inject constructor(
                         if (e is CancellationException) return@onFailure
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
+                            isLoadingMore = false,
                             error = e.message ?: "Failed to load media"
                         )
                     }
@@ -92,13 +123,30 @@ class AlbumViewModel @Inject constructor(
         }
     }
 
+    fun loadNextPage(albumId: Long) {
+        val state = _uiState.value
+        if (state.isLoading || state.isLoadingMore || !state.hasMore) return
+        loadMediaPage(albumId, page = state.page + 1, append = true)
+    }
+
     fun setFilter(filter: MediaFilter) {
-        _uiState.value = _uiState.value.copy(selectedFilter = filter)
-        _uiState.value.album?.let { loadMedia(it.id) }
+        _uiState.value = _uiState.value.copy(
+            selectedFilter = filter,
+            mediaList = emptyList(),
+            page = 0,
+            hasMore = true
+        )
+        _uiState.value.album?.let { loadMediaPage(it.id, page = 0, append = false) }
     }
 
     fun resetFilter() {
-        _uiState.value = _uiState.value.copy(selectedFilter = MediaFilter.ALL)
+        _uiState.value = _uiState.value.copy(
+            selectedFilter = MediaFilter.ALL,
+            mediaList = emptyList(),
+            page = 0,
+            hasMore = true
+        )
+        _uiState.value.album?.let { loadMediaPage(it.id, page = 0, append = false) }
     }
 
     fun deleteMedia(mediaId: Long) {

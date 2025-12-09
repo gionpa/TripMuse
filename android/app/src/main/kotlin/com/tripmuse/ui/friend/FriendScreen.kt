@@ -1,9 +1,11 @@
 package com.tripmuse.ui.friend
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -13,6 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -23,6 +27,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.Friend
+import com.tripmuse.data.model.Invitation
 import com.tripmuse.data.model.UserSearchResult
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,7 +56,10 @@ fun FriendScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("친구") }
+                title = { Text("친구") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                )
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -111,10 +119,19 @@ fun FriendScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
+                        if (uiState.invitations.isNotEmpty()) {
+                            item {
+                                InvitationSection(
+                                    invitations = uiState.invitations,
+                                    onAccept = { id -> viewModel.acceptInvitation(id) },
+                                    onReject = { id -> viewModel.rejectInvitation(id) }
+                                )
+                            }
+                        }
                         items(uiState.searchResults) { user ->
                             SearchResultItem(
                                 user = user,
-                                onAddFriend = { viewModel.addFriend(user.id) }
+                                onInvite = { viewModel.sendInvitation(user.id) }
                             )
                         }
                     }
@@ -160,6 +177,15 @@ fun FriendScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
+                        if (uiState.invitations.isNotEmpty()) {
+                            item {
+                                InvitationSection(
+                                    invitations = uiState.invitations,
+                                    onAccept = { id -> viewModel.acceptInvitation(id) },
+                                    onReject = { id -> viewModel.rejectInvitation(id) }
+                                )
+                            }
+                        }
                         item {
                             Text(
                                 text = "내 친구 ${uiState.friends.size}명",
@@ -184,7 +210,7 @@ fun FriendScreen(
 @Composable
 fun SearchResultItem(
     user: UserSearchResult,
-    onAddFriend: () -> Unit
+    onInvite: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -251,11 +277,115 @@ fun SearchResultItem(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("친구")
                 }
+            } else if (user.invitedByMe) {
+                FilledTonalButton(
+                    onClick = { },
+                    enabled = false
+                ) {
+                    Icon(Icons.Default.Schedule, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("초대 보냄")
+                }
+            } else if (user.invitedMe && user.invitationId != null) {
+                FilledTonalButton(
+                    onClick = { },
+                    enabled = false
+                ) {
+                    Icon(Icons.Default.MarkEmailUnread, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("초대 도착")
+                }
             } else {
-                Button(onClick = onAddFriend) {
+                Button(onClick = onInvite) {
                     Icon(Icons.Default.PersonAdd, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("추가")
+                    Text("초대")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InvitationSection(
+    invitations: List<Invitation>,
+    onAccept: (Long) -> Unit,
+    onReject: (Long) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = "초대 요청",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        invitations.forEach { invite ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                tonalElevation = 2.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val context = LocalContext.current
+                    if (invite.fromProfileImageUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(ApiModule.BASE_URL.trimEnd('/') + invite.fromProfileImageUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.size(44.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = invite.fromNickname.take(1),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(invite.fromNickname, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            invite.fromEmail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Row {
+                        TextButton(onClick = { onReject(invite.invitationId) }) {
+                            Text("거절")
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Button(onClick = { onAccept(invite.invitationId) }) {
+                            Text("수락")
+                        }
+                    }
                 }
             }
         }
@@ -293,13 +423,28 @@ fun FriendItem(
         )
     }
 
+    val cardShape = RoundedCornerShape(16.dp)
     Surface(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .shadow(elevation = 6.dp, shape = cardShape),
+        shape = cardShape,
+        color = MaterialTheme.colorScheme.surface
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                        )
+                    ),
+                    shape = cardShape
+                )
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Avatar
@@ -311,13 +456,13 @@ fun FriendItem(
                         .build(),
                     contentDescription = "프로필 이미지",
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(54.dp)
                         .clip(CircleShape),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Surface(
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(54.dp),
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
@@ -331,13 +476,13 @@ fun FriendItem(
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
             // Info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = friend.nickname,
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Text(
                     text = friend.email,
@@ -346,14 +491,22 @@ fun FriendItem(
                 )
             }
 
-            // Remove button
-            IconButton(onClick = { showRemoveDialog = true }) {
-                Icon(
-                    Icons.Default.PersonRemove,
-                    contentDescription = "친구 삭제",
-                    tint = MaterialTheme.colorScheme.error
+            // Remove button (chip-style)
+            AssistChip(
+                onClick = { showRemoveDialog = true },
+                label = { Text("삭제") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.PersonRemove,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    labelColor = MaterialTheme.colorScheme.onErrorContainer
                 )
-            }
+            )
         }
     }
 }

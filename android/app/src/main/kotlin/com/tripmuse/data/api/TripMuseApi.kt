@@ -80,7 +80,9 @@ interface TripMuseApi {
     @GET("albums/{albumId}/media")
     suspend fun getMediaByAlbum(
         @Path("albumId") albumId: Long,
-        @Query("type") type: String? = null
+        @Query("type") type: String? = null,
+        @Query("page") page: Int? = null,
+        @Query("size") size: Int? = null
     ): Response<MediaListResponse>
 
     @Multipart
@@ -178,5 +180,18 @@ interface TripMuseApi {
     @DELETE("friends/{friendId}")
     suspend fun removeFriend(
         @Path("friendId") friendId: Long
+    ): Response<Unit>
+
+    @GET("friends/invitations")
+    suspend fun getInvitations(): Response<InvitationListResponse>
+
+    @POST("friends/invitations/{invitationId}/accept")
+    suspend fun acceptInvitation(
+        @Path("invitationId") invitationId: Long
+    ): Response<Unit>
+
+    @POST("friends/invitations/{invitationId}/reject")
+    suspend fun rejectInvitation(
+        @Path("invitationId") invitationId: Long
     ): Response<Unit>
 }

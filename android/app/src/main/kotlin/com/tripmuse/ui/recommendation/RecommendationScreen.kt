@@ -30,7 +30,10 @@ fun RecommendationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("스마트 추천") }
+                title = { Text("스마트 추천") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                )
             )
         }
     ) { paddingValues ->

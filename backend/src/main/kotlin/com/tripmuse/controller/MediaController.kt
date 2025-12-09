@@ -30,9 +30,11 @@ class MediaController(
     fun getMediaByAlbum(
         @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable albumId: Long,
-        @RequestParam(required = false) type: MediaType?
+        @RequestParam(required = false) type: MediaType?,
+        @RequestParam(required = false, defaultValue = "0") page: Int,
+        @RequestParam(required = false, defaultValue = "12") size: Int
     ): ResponseEntity<MediaListResponse> {
-        val mediaList = mediaService.getMediaByAlbum(albumId, user.id, type)
+        val mediaList = mediaService.getMediaByAlbum(albumId, user.id, type, page, size)
         return ResponseEntity.ok(mediaList)
     }
 

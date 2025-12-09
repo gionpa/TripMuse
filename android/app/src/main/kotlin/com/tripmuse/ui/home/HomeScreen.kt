@@ -121,7 +121,7 @@ fun HomeScreen(
                         }
                     }
                 }
-                uiState.albums.isEmpty() -> {
+                uiState.filteredAlbums.isEmpty() -> {
                     Column(
                         modifier = Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -138,25 +138,54 @@ fun HomeScreen(
                     }
                 }
                 else -> {
-                    val albumsToShow = if (uiState.isSearching) uiState.filteredAlbums else uiState.albums
-                    if (albumsToShow.isEmpty() && uiState.isSearching) {
-                        Column(
-                            modifier = Modifier.align(Alignment.Center),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                    val albumsToShow = uiState.filteredAlbums
+                    val selectedTab = uiState.selectedTab
+                    val allowModify = selectedTab == AlbumTab.MINE
+
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        TabRow(
+                            selectedTabIndex = if (selectedTab == AlbumTab.MINE) 0 else 1
                         ) {
-                            Text(
-                                text = "검색 결과가 없습니다",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            Tab(
+                                selected = selectedTab == AlbumTab.MINE,
+                                onClick = { viewModel.selectTab(AlbumTab.MINE) },
+                                text = { Text("나의 앨범") }
+                            )
+                            Tab(
+                                selected = selectedTab == AlbumTab.SHARED,
+                                onClick = { viewModel.selectTab(AlbumTab.SHARED) },
+                                text = { Text("공유 받은 앨범") }
                             )
                         }
-                    } else {
-                        DraggableAlbumGrid(
-                            albums = albumsToShow,
-                            onAlbumClick = onAlbumClick,
-                            onDeleteClick = { viewModel.deleteAlbum(it) },
-                            onMove = { from, to -> viewModel.moveAlbum(from, to) }
-                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (albumsToShow.isEmpty()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = if (selectedTab == AlbumTab.MINE) "아직 앨범이 없습니다" else "공유 받은 앨범이 없습니다",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            DraggableAlbumGrid(
+                                albums = albumsToShow,
+                                onAlbumClick = onAlbumClick,
+                                onDeleteClick = { if (allowModify) viewModel.deleteAlbum(it) },
+                                onMove = { from, to -> if (allowModify) viewModel.moveAlbum(from, to) },
+                                enableReorder = allowModify,
+                                showDelete = allowModify
+                            )
+                        }
                     }
                 }
             }
@@ -169,7 +198,9 @@ fun DraggableAlbumGrid(
     albums: List<Album>,
     onAlbumClick: (Long) -> Unit,
     onDeleteClick: (Long) -> Unit,
-    onMove: (Int, Int) -> Unit
+    onMove: (Int, Int) -> Unit,
+    enableReorder: Boolean,
+    showDelete: Boolean
 ) {
     var draggedItemIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(Pair(0f, 0f)) }
@@ -190,9 +221,8 @@ fun DraggableAlbumGrid(
             key = { _, album -> album.id }
         ) { index, album ->
             val isDragging = draggedItemIndex == index
-
-            Box(
-                modifier = Modifier
+            val dragModifier = if (enableReorder) {
+                Modifier
                     .zIndex(if (isDragging) 1f else 0f)
                     .graphicsLayer {
                         if (isDragging) {
@@ -254,12 +284,19 @@ fun DraggableAlbumGrid(
                             }
                         )
                     }
+            } else {
+                Modifier
+            }
+
+            Box(
+                modifier = dragModifier
             ) {
                 AlbumCard(
                     album = album,
                     onClick = { if (!isDragging) onAlbumClick(album.id) },
                     onDeleteClick = { onDeleteClick(album.id) },
-                    isDragging = isDragging
+                    isDragging = isDragging && enableReorder,
+                    showMenu = showDelete
                 )
             }
         }
@@ -302,9 +339,10 @@ fun AlbumCard(
     album: Album,
     onClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    isDragging: Boolean = false
+    isDragging: Boolean = false,
+    showMenu: Boolean = true
 ) {
-    var showMenu by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     val elevation by animateDpAsState(
@@ -368,30 +406,32 @@ fun AlbumCard(
                 }
 
                 // More options
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                ) {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(
-                            Icons.Default.MoreVert,
-                            contentDescription = "더보기",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
+                if (showMenu) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
                     ) {
-                        DropdownMenuItem(
-                            text = { Text("삭제") },
-                            onClick = {
-                                showMenu = false
-                                onDeleteClick()
-                            },
-                            enabled = album.isOwner
-                        )
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "더보기",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("삭제") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onDeleteClick()
+                                },
+                                enabled = album.isOwner
+                            )
+                        }
                     }
                 }
             }

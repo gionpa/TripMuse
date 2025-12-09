@@ -92,9 +92,14 @@ class MediaRepository @Inject constructor(
         }
     }
 
-    suspend fun getMediaByAlbum(albumId: Long, type: MediaType? = null): Result<List<Media>> {
+    suspend fun getMediaByAlbum(
+        albumId: Long,
+        type: MediaType? = null,
+        page: Int? = null,
+        size: Int? = null
+    ): Result<List<Media>> {
         return try {
-            val response = api.getMediaByAlbum(albumId, type?.name)
+            val response = api.getMediaByAlbum(albumId, type?.name, page, size)
             if (response.isSuccessful) {
                 val mediaList = response.body()?.media?.map { it.withFullUrls(serverBaseUrl) } ?: emptyList()
                 Result.success(mediaList)

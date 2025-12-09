@@ -43,19 +43,29 @@ class MediaService(
 
     @Cacheable(
         cacheNames = ["albumMedia"],
-        key = "#userId + ':' + #albumId + ':' + (#type?.name() ?: 'ALL')",
+        key = "#userId + ':' + #albumId + ':' + (#type?.name() ?: 'ALL') + ':' + #page + ':' + #size",
         unless = "#result.media.isEmpty()"
     )
-    fun getMediaByAlbum(albumId: Long, userId: Long, type: MediaType? = null): MediaListResponse {
+    fun getMediaByAlbum(
+        albumId: Long,
+        userId: Long,
+        type: MediaType? = null,
+        page: Int = 0,
+        size: Int = 12
+    ): MediaListResponse {
         // Verify album access
         albumService.getAlbumDetail(albumId, userId)
 
-        // Use Fetch Join to avoid N+1 queries
-        val mediaList = if (type != null) {
-            mediaRepository.findByAlbumIdAndTypeWithAlbumOrderByTakenAtDesc(albumId, type)
+        val pageSize = size.coerceIn(1, 100)
+        val pageRequest = org.springframework.data.domain.PageRequest.of(page, pageSize)
+
+        val mediaPage = if (type != null) {
+            mediaRepository.findByAlbumIdAndTypeOrderByTakenAtDesc(albumId, type, pageRequest)
         } else {
-            mediaRepository.findByAlbumIdWithAlbumOrderByTakenAtDesc(albumId)
+            mediaRepository.findByAlbumIdOrderByTakenAtDesc(albumId, pageRequest)
         }
+
+        val mediaList = mediaPage.content
 
         return MediaListResponse(mediaList.map { media ->
             val locationName = geocodingService.reverseGeocode(media.latitude, media.longitude)

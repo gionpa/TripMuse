@@ -3,6 +3,7 @@ package com.tripmuse.controller
 import com.tripmuse.dto.AddFriendRequest
 import com.tripmuse.dto.FriendListResponse
 import com.tripmuse.dto.FriendResponse
+import com.tripmuse.dto.InvitationListResponse
 import com.tripmuse.dto.UserSearchListResponse
 import com.tripmuse.security.CustomUserDetails
 import com.tripmuse.service.FriendService
@@ -49,6 +50,32 @@ class FriendController(
         @PathVariable friendId: Long
     ): ResponseEntity<Unit> {
         friendService.removeFriend(user.id, friendId)
+        return ResponseEntity.ok().build()
+    }
+
+    @GetMapping("/invitations")
+    fun getInvitations(
+        @AuthenticationPrincipal user: CustomUserDetails
+    ): ResponseEntity<InvitationListResponse> {
+        val response = friendService.getInvitations(user.id)
+        return ResponseEntity.ok(response)
+    }
+
+    @PostMapping("/invitations/{invitationId}/accept")
+    fun acceptInvitation(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable invitationId: Long
+    ): ResponseEntity<Unit> {
+        friendService.acceptInvitation(user.id, invitationId)
+        return ResponseEntity.ok().build()
+    }
+
+    @PostMapping("/invitations/{invitationId}/reject")
+    fun rejectInvitation(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable invitationId: Long
+    ): ResponseEntity<Unit> {
+        friendService.rejectInvitation(user.id, invitationId)
         return ResponseEntity.ok().build()
     }
 }

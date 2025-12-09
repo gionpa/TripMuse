@@ -3,6 +3,7 @@ package com.tripmuse.ui.friend
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tripmuse.data.model.Friend
+import com.tripmuse.data.model.Invitation
 import com.tripmuse.data.model.UserSearchResult
 import com.tripmuse.data.repository.FriendRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,6 +18,7 @@ import javax.inject.Inject
 data class FriendUiState(
     val isLoading: Boolean = false,
     val friends: List<Friend> = emptyList(),
+    val invitations: List<Invitation> = emptyList(),
     val searchResults: List<UserSearchResult> = emptyList(),
     val searchQuery: String = "",
     val isSearching: Boolean = false,
@@ -36,6 +38,7 @@ class FriendViewModel @Inject constructor(
 
     init {
         loadFriends()
+        loadInvitations()
     }
 
     fun loadFriends() {
@@ -48,12 +51,25 @@ class FriendViewModel @Inject constructor(
                         isLoading = false,
                         friends = response.friends
                     )
+                    loadInvitations()
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = e.message
                     )
+                }
+        }
+    }
+
+    fun loadInvitations() {
+        viewModelScope.launch {
+            friendRepository.getInvitations()
+                .onSuccess { res ->
+                    _uiState.value = _uiState.value.copy(invitations = res.invitations)
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(error = e.message)
                 }
         }
     }
@@ -92,17 +108,17 @@ class FriendViewModel @Inject constructor(
             }
     }
 
-    fun addFriend(userId: Long) {
+    fun sendInvitation(userId: Long) {
         viewModelScope.launch {
             friendRepository.addFriend(userId)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(
-                        successMessage = "친구로 추가되었습니다",
+                        successMessage = "초대 요청을 보냈습니다",
                         searchResults = _uiState.value.searchResults.map { user ->
-                            if (user.id == userId) user.copy(isFriend = true) else user
+                            if (user.id == userId) user.copy(invitedByMe = true) else user
                         }
                     )
-                    loadFriends()
+                    loadInvitations()
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(error = e.message)
@@ -121,6 +137,34 @@ class FriendViewModel @Inject constructor(
                             if (user.id == friendId) user.copy(isFriend = false) else user
                         }
                     )
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(error = e.message)
+                }
+        }
+    }
+
+    fun acceptInvitation(invitationId: Long) {
+        viewModelScope.launch {
+            friendRepository.acceptInvitation(invitationId)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        successMessage = "초대를 수락했습니다"
+                    )
+                    loadFriends()
+                    loadInvitations()
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(error = e.message)
+                }
+        }
+    }
+
+    fun rejectInvitation(invitationId: Long) {
+        viewModelScope.launch {
+            friendRepository.rejectInvitation(invitationId)
+                .onSuccess {
+                    loadInvitations()
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(error = e.message)

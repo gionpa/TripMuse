@@ -7,6 +7,8 @@ import com.tripmuse.dto.FriendListResponse
 import com.tripmuse.dto.FriendResponse
 import com.tripmuse.dto.UserSearchListResponse
 import com.tripmuse.dto.UserSearchResponse
+import com.tripmuse.dto.InvitationListResponse
+import com.tripmuse.dto.InvitationResponse
 import com.tripmuse.repository.FriendshipRepository
 import com.tripmuse.repository.UserRepository
 import org.springframework.http.HttpStatus
@@ -37,12 +39,25 @@ class FriendService(
             .filter { it.id != userId }
             .take(20)
 
-        val friendIds = friendshipRepository.findByUserIdAndStatus(userId, FriendshipStatus.ACCEPTED)
-            .map { it.friend.id }
-            .toSet()
+        val acceptedIds = friendshipRepository.findByUserIdAndStatus(userId, FriendshipStatus.ACCEPTED)
+            .map { it.friend.id }.toSet()
+        val outgoingPending = friendshipRepository.findByUserIdAndStatus(userId, FriendshipStatus.PENDING)
+            .map { it.friend.id }.toSet()
+        val incomingPending = friendshipRepository.findByFriendIdAndStatus(userId, FriendshipStatus.PENDING)
+            .associateBy({ it.user.id }, { it.id })
 
         val results = users.map { user ->
-            UserSearchResponse.from(user, friendIds.contains(user.id))
+            val isFriend = acceptedIds.contains(user.id)
+            val invitedByMe = outgoingPending.contains(user.id)
+            val invitedMe = incomingPending.containsKey(user.id)
+            val invitationId = incomingPending[user.id]
+            UserSearchResponse.from(
+                user = user,
+                isFriend = isFriend,
+                invitedByMe = invitedByMe,
+                invitedMe = invitedMe,
+                invitationId = invitationId
+            )
         }
 
         return UserSearchListResponse(results, results.size)
@@ -60,29 +75,38 @@ class FriendService(
         val friend = userRepository.findById(request.friendId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "친구로 추가할 사용자를 찾을 수 없습니다") }
 
-        if (friendshipRepository.existsByUserIdAndFriendId(userId, request.friendId)) {
+        // 이미 친구면 거절
+        if (friendshipRepository.findByUserIdAndFriendIdAndStatus(userId, request.friendId, FriendshipStatus.ACCEPTED).isPresent) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "이미 친구로 등록된 사용자입니다")
         }
 
-        // 정방향 친구 관계 생성 (user -> friend)
-        val friendship = Friendship(
-            user = user,
-            friend = friend,
-            status = FriendshipStatus.ACCEPTED
-        )
-        val saved = friendshipRepository.save(friendship)
-
-        // 역방향 친구 관계 생성 (friend -> user) - 양방향 친구 관계
-        if (!friendshipRepository.existsByUserIdAndFriendId(request.friendId, userId)) {
-            val reverseFriendship = Friendship(
-                user = friend,
-                friend = user,
-                status = FriendshipStatus.ACCEPTED
-            )
-            friendshipRepository.save(reverseFriendship)
+        // 내가 보낸 PENDING 있으면 재요청 방지
+        if (friendshipRepository.findByUserIdAndFriendIdAndStatus(userId, request.friendId, FriendshipStatus.PENDING).isPresent) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 초대 요청을 보냈습니다")
         }
 
-        return FriendResponse.from(saved)
+        // 상대가 보낸 PENDING이 있으면 그것을 ACCEPT 처리
+        val incomingOpt = friendshipRepository.findByUserIdAndFriendIdAndStatus(request.friendId, userId, FriendshipStatus.PENDING)
+        if (incomingOpt.isPresent) {
+            val incoming = incomingOpt.get()
+            acceptInternal(incoming)
+            return FriendResponse.from(incoming)
+        }
+
+        // 초대(PENDING) 생성
+        val invitation = Friendship(
+            user = user,
+            friend = friend,
+            status = FriendshipStatus.PENDING
+        )
+        val saved = friendshipRepository.save(invitation)
+        return FriendResponse(
+            id = saved.friend.id,
+            email = saved.friend.email,
+            nickname = saved.friend.nickname,
+            profileImageUrl = saved.friend.profileImageUrl,
+            addedAt = saved.createdAt
+        )
     }
 
     @Transactional
@@ -98,5 +122,51 @@ class FriendService(
             .ifPresent { reverseFriendship ->
                 friendshipRepository.delete(reverseFriendship)
             }
+    }
+
+    @Transactional(readOnly = true)
+    fun getInvitations(userId: Long): InvitationListResponse {
+        val invitations = friendshipRepository.findByFriendIdAndStatus(userId, FriendshipStatus.PENDING)
+        return InvitationListResponse(invitations.map { InvitationResponse.from(it) })
+    }
+
+    @Transactional
+    fun acceptInvitation(userId: Long, invitationId: Long) {
+        val invitation = friendshipRepository.findById(invitationId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "초대 요청을 찾을 수 없습니다") }
+        if (invitation.friend.id != userId || invitation.status != FriendshipStatus.PENDING) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "이 초대 요청을 수락할 수 없습니다")
+        }
+        acceptInternal(invitation)
+    }
+
+    @Transactional
+    fun rejectInvitation(userId: Long, invitationId: Long) {
+        val invitation = friendshipRepository.findById(invitationId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "초대 요청을 찾을 수 없습니다") }
+        if (invitation.friend.id != userId || invitation.status != FriendshipStatus.PENDING) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "이 초대 요청을 거절할 수 없습니다")
+        }
+        invitation.status = FriendshipStatus.REJECTED
+        friendshipRepository.save(invitation)
+    }
+
+    private fun acceptInternal(invitation: Friendship) {
+        val requester = invitation.user
+        val receiver = invitation.friend
+
+        invitation.status = FriendshipStatus.ACCEPTED
+        friendshipRepository.save(invitation)
+
+        // 역방향 친구 관계 생성
+        if (!friendshipRepository.existsByUserIdAndFriendId(receiver.id, requester.id)) {
+            friendshipRepository.save(
+                Friendship(
+                    user = receiver,
+                    friend = requester,
+                    status = FriendshipStatus.ACCEPTED
+                )
+            )
+        }
     }
 }

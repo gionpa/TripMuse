@@ -33,7 +33,7 @@ class AlbumService(
         // 친구의 "친구에게 공개" 앨범 조회
         val friendIds = friendshipRepository.findFriendIdsByUserIdAndStatus(userId, FriendshipStatus.ACCEPTED)
         val friendAlbums = if (friendIds.isNotEmpty()) {
-            albumRepository.findFriendsAlbumsWithFriendsOnlyVisibility(friendIds)
+            albumRepository.findVisibleAlbumsByFriendIds(friendIds)
         } else {
             emptyList()
         }
@@ -65,7 +65,11 @@ class AlbumService(
 
         return when (album.visibility ?: AlbumVisibility.PRIVATE) {
             AlbumVisibility.PUBLIC -> true
-            AlbumVisibility.FRIENDS_ONLY -> friendshipRepository.existsByUserIdAndFriendId(album.user.id, userId)
+            AlbumVisibility.FRIENDS_ONLY -> friendshipRepository.existsByUserIdAndFriendIdAndStatus(
+                album.user.id,
+                userId,
+                FriendshipStatus.ACCEPTED
+            )
             AlbumVisibility.PRIVATE -> false
         }
     }

@@ -14,7 +14,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -31,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -49,6 +53,11 @@ import coil.request.ImageRequest
 import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.Comment
 import com.tripmuse.data.model.MediaType
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -164,12 +173,19 @@ fun MediaDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
-            key = { page -> mediaIds.getOrElse(page) { page.toLong() } }
+            key = { page -> mediaIds.getOrElse(page) { page.toLong() } },
+            pageSpacing = 8.dp,
+            beyondBoundsPageCount = 1,
+            flingBehavior = PagerDefaults.flingBehavior(
+                state = pagerState,
+                snapAnimationSpec = spring(stiffness = Spring.StiffnessLow)
+            )
         ) { page ->
             val pageMediaId = mediaIds.getOrElse(page) { initialMediaId }
             MediaDetailPageContent(
                 mediaId = pageMediaId,
                 isCurrentPage = page == pagerState.currentPage,
+                isSettling = pagerState.currentPageOffsetFraction != 0f,
                 uiState = uiState,
                 viewModel = viewModel
             )
@@ -181,102 +197,108 @@ fun MediaDetailScreen(
 private fun MediaDetailPageContent(
     mediaId: Long,
     isCurrentPage: Boolean,
+    isSettling: Boolean,
     uiState: MediaDetailUiState,
     viewModel: MediaViewModel
 ) {
-    // Only show content for the current page to avoid loading all at once
-    if (!isCurrentPage) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        when {
-            uiState.isLoading -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
-            uiState.error != null -> {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = uiState.error ?: "오류가 발생했습니다",
-                        color = MaterialTheme.colorScheme.error
+        val showContent = uiState.media != null && uiState.media.id == mediaId && isCurrentPage
+
+        if (showContent) {
+            when {
+                uiState.isLoading -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = { viewModel.loadMedia(mediaId) }) {
-                        Text("다시 시도")
+                }
+                uiState.error != null -> {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = uiState.error ?: "오류가 발생했습니다",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = { viewModel.loadMedia(mediaId) }) {
+                            Text("다시 시도")
+                        }
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        // Media viewer
+                        item {
+                            MediaViewer(
+                                fileUrl = uiState.media!!.fileUrl,
+                                mediaType = uiState.media!!.type
+                            )
+                        }
+
+                        // Metadata
+                        item {
+                            MediaMetadataSection(media = uiState.media!!)
+                        }
+
+                        // Memo section
+                        item {
+                            MemoSection(
+                                memo = uiState.media!!.memo?.content,
+                                isEditing = uiState.isEditingMemo,
+                                isSaving = uiState.isSavingMemo,
+                                editContent = uiState.memoContent,
+                                onEditClick = { viewModel.setEditingMemo(true) },
+                                onCancelClick = { viewModel.setEditingMemo(false) },
+                                onContentChange = { viewModel.updateMemoContent(it) },
+                                onSaveClick = { viewModel.saveMemo() }
+                            )
+                        }
+
+                        // Comments header
+                        item {
+                            Text(
+                                text = "댓글 (${uiState.comments.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+
+                        // Comments list
+                        items(uiState.comments) { comment ->
+                            CommentItem(
+                                comment = comment,
+                                onDeleteClick = { viewModel.deleteComment(comment.id) }
+                            )
+                        }
+
+                        // Comment input
+                        item {
+                            CommentInput(
+                                value = uiState.commentInput,
+                                onValueChange = { viewModel.updateCommentInput(it) },
+                                onSendClick = { viewModel.postComment() }
+                            )
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
                     }
                 }
             }
-            uiState.media != null -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    // Media viewer
-                    item {
-                        MediaViewer(
-                            fileUrl = uiState.media!!.fileUrl,
-                            mediaType = uiState.media!!.type
-                        )
-                    }
-
-                    // Metadata
-                    item {
-                        MediaMetadataSection(media = uiState.media!!)
-                    }
-
-                    // Memo section
-                    item {
-                        MemoSection(
-                            memo = uiState.media!!.memo?.content,
-                            isEditing = uiState.isEditingMemo,
-                            isSaving = uiState.isSavingMemo,
-                            editContent = uiState.memoContent,
-                            onEditClick = { viewModel.setEditingMemo(true) },
-                            onCancelClick = { viewModel.setEditingMemo(false) },
-                            onContentChange = { viewModel.updateMemoContent(it) },
-                            onSaveClick = { viewModel.saveMemo() }
-                        )
-                    }
-
-                    // Comments header
-                    item {
-                        Text(
-                            text = "댓글 (${uiState.comments.size})",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-
-                    // Comments list
-                    items(uiState.comments) { comment ->
-                        CommentItem(
-                            comment = comment,
-                            onDeleteClick = { viewModel.deleteComment(comment.id) }
-                        )
-                    }
-
-                    // Comment input
-                    item {
-                        CommentInput(
-                            value = uiState.commentInput,
-                            onValueChange = { viewModel.updateCommentInput(it) },
-                            onSendClick = { viewModel.postComment() }
-                        )
-                    }
-
-                    item {
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
+        } else {
+            // Placeholder during swipe for non-current pages to keep transition smooth
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSettling) {
+                    CircularProgressIndicator()
                 }
             }
         }
@@ -569,7 +591,28 @@ fun MediaMetadataSection(media: com.tripmuse.data.model.MediaDetail) {
     Column(
         modifier = Modifier.padding(16.dp)
     ) {
-        if (media.takenAt != null) {
+        val formattedTakenAt = remember(media.takenAt) {
+            media.takenAt?.let { raw ->
+                // Try OffsetDateTime -> LocalDateTime fallbacks, default to replacing 'T'
+                val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                runCatching {
+                    OffsetDateTime.parse(raw)
+                        .withOffsetSameInstant(ZoneOffset.ofHours(9))
+                        .toLocalDateTime()
+                        .format(formatter)
+                }.recoverCatching {
+                    LocalDateTime.parse(raw)
+                        .atZone(ZoneId.systemDefault())
+                        .withZoneSameInstant(ZoneId.of("Asia/Seoul"))
+                        .toLocalDateTime()
+                        .format(formatter)
+                }.getOrElse {
+                    raw.replace("T", " ")
+                }
+            }
+        }
+
+        if (formattedTakenAt != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.DateRange,
@@ -579,7 +622,7 @@ fun MediaMetadataSection(media: com.tripmuse.data.model.MediaDetail) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = media.takenAt,
+                    text = formattedTakenAt,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

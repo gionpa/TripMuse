@@ -29,16 +29,28 @@ data class UserSearchResponse(
     val email: String,
     val nickname: String,
     val profileImageUrl: String?,
-    val isFriend: Boolean
+    val isFriend: Boolean,
+    val invitedByMe: Boolean = false,
+    val invitedMe: Boolean = false,
+    val invitationId: Long? = null
 ) {
     companion object {
-        fun from(user: User, isFriend: Boolean): UserSearchResponse {
+        fun from(
+            user: User,
+            isFriend: Boolean,
+            invitedByMe: Boolean,
+            invitedMe: Boolean,
+            invitationId: Long?
+        ): UserSearchResponse {
             return UserSearchResponse(
                 id = user.id,
                 email = user.email,
                 nickname = user.nickname,
                 profileImageUrl = user.profileImageUrl,
-                isFriend = isFriend
+                isFriend = isFriend,
+                invitedByMe = invitedByMe,
+                invitedMe = invitedMe,
+                invitationId = invitationId
             )
         }
     }
@@ -56,4 +68,28 @@ data class UserSearchListResponse(
 
 data class AddFriendRequest(
     val friendId: Long
+)
+
+data class InvitationResponse(
+    val invitationId: Long,
+    val fromUserId: Long,
+    val fromEmail: String,
+    val fromNickname: String,
+    val fromProfileImageUrl: String?
+) {
+    companion object {
+        fun from(friendship: Friendship): InvitationResponse {
+            return InvitationResponse(
+                invitationId = friendship.id,
+                fromUserId = friendship.user.id,
+                fromEmail = friendship.user.email,
+                fromNickname = friendship.user.nickname,
+                fromProfileImageUrl = friendship.user.profileImageUrl
+            )
+        }
+    }
+}
+
+data class InvitationListResponse(
+    val invitations: List<InvitationResponse>
 )

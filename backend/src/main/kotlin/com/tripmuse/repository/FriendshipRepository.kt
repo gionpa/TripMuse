@@ -15,6 +15,12 @@ interface FriendshipRepository : JpaRepository<Friendship, Long> {
         @Param("status") status: FriendshipStatus
     ): List<Friendship>
 
+    @Query("SELECT f FROM Friendship f WHERE f.friend.id = :friendId AND f.status = :status")
+    fun findByFriendIdAndStatus(
+        @Param("friendId") friendId: Long,
+        @Param("status") status: FriendshipStatus
+    ): List<Friendship>
+
     @Query("SELECT f FROM Friendship f WHERE f.user.id = :userId AND f.friend.id = :friendId")
     fun findByUserIdAndFriendId(
         @Param("userId") userId: Long,
@@ -26,6 +32,20 @@ interface FriendshipRepository : JpaRepository<Friendship, Long> {
         @Param("userId") userId: Long,
         @Param("friendId") friendId: Long
     ): Boolean
+
+    @Query("SELECT COUNT(f) > 0 FROM Friendship f WHERE f.user.id = :userId AND f.friend.id = :friendId AND f.status = :status")
+    fun existsByUserIdAndFriendIdAndStatus(
+        @Param("userId") userId: Long,
+        @Param("friendId") friendId: Long,
+        @Param("status") status: FriendshipStatus
+    ): Boolean
+
+    @Query("SELECT f FROM Friendship f WHERE f.user.id = :userId AND f.friend.id = :friendId AND f.status = :status")
+    fun findByUserIdAndFriendIdAndStatus(
+        @Param("userId") userId: Long,
+        @Param("friendId") friendId: Long,
+        @Param("status") status: FriendshipStatus
+    ): Optional<Friendship>
 
     @Query("SELECT f.friend.id FROM Friendship f WHERE f.user.id = :userId AND f.status = :status")
     fun findFriendIdsByUserIdAndStatus(

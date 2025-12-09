@@ -25,8 +25,8 @@ interface AlbumRepository : JpaRepository<Album, Long> {
     @Query("""
         SELECT a FROM Album a
         WHERE a.user.id IN :friendIds
-        AND a.visibility = 'FRIENDS_ONLY'
+        AND (a.visibility = 'FRIENDS_ONLY' OR a.visibility = 'PUBLIC')
         ORDER BY a.createdAt DESC
     """)
-    fun findFriendsAlbumsWithFriendsOnlyVisibility(friendIds: List<Long>): List<Album>
+    fun findVisibleAlbumsByFriendIds(friendIds: List<Long>): List<Album>
 }

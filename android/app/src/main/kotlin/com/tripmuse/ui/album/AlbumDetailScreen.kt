@@ -5,8 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -215,7 +216,7 @@ fun AlbumDetailScreen(
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                items(displayList) { media ->
+                                itemsIndexed(displayList) { index, media ->
                                     MediaThumbnail(
                                         media = media,
                                         isOwner = uiState.album?.isOwner == true,
@@ -223,6 +224,21 @@ fun AlbumDetailScreen(
                                         onSetCover = { viewModel.setCoverImage(media.id) },
                                         onDelete = { viewModel.deleteMedia(media.id) }
                                     )
+                                    if (index >= displayList.size - 4 && uiState.hasMore && !uiState.isLoadingMore) {
+                                        viewModel.loadNextPage(albumId)
+                                    }
+                                }
+                                if (uiState.isLoadingMore) {
+                                    item(span = { GridItemSpan(4) }) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                        }
+                                    }
                                 }
                             }
                         }
