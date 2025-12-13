@@ -11,6 +11,7 @@ import com.tripmuse.domain.Role
 import com.tripmuse.domain.User
 import com.tripmuse.repository.UserRepository
 import com.tripmuse.security.JwtTokenProvider
+import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.http.HttpStatus
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -27,6 +28,7 @@ class AuthService(
     private val redisTemplate: StringRedisTemplate,
     private val naverOAuthClient: NaverOAuthClient
 ) {
+    private val log = LoggerFactory.getLogger(AuthService::class.java)
 
     @Transactional
     fun signup(request: SignupRequest): AuthResponse {
@@ -64,41 +66,63 @@ class AuthService(
 
     @Transactional
     fun loginWithNaver(request: NaverLoginRequest): AuthResponse {
+        log.info("Naver login attempt with token: ${request.accessToken.take(10)}...")
+
         val profile = naverOAuthClient.fetchUserInfo(request.accessToken)
-            ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Failed to verify Naver token")
+        if (profile == null) {
+            log.error("Failed to fetch Naver user info - token may be invalid or expired")
+            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Failed to verify Naver token")
+        }
+
+        log.info("Naver profile fetched - id: ${profile.id}, email: ${profile.email}, nickname: ${profile.nickname}")
 
         val email = profile.email
-            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required from Naver")
+        if (email == null) {
+            log.error("Naver profile missing email - id: ${profile.id}")
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required from Naver")
+        }
 
-        val user = userRepository.findByEmail(email)
-            .orElseGet {
-                User(
-                    email = email,
-                    nickname = profile.nickname ?: "TripMuse User",
-                    profileImageUrl = profile.profile_image,
-                    password = null,
-                    role = Role.USER,
-                    provider = Provider.NAVER,
-                    providerId = profile.id
-                )
-            }
+        val existingUser = userRepository.findByEmail(email)
+        val isNewUser = existingUser.isEmpty
+        log.info("User lookup by email '$email' - found: ${!isNewUser}")
+
+        val user = existingUser.orElseGet {
+            log.info("Creating new user for email: $email")
+            User(
+                email = email,
+                nickname = profile.nickname ?: "TripMuse User",
+                profileImageUrl = profile.profile_image,
+                password = null,
+                role = Role.USER,
+                provider = Provider.NAVER,
+                providerId = profile.id
+            )
+        }
 
         if (user.provider == Provider.LOCAL) {
-            // Keep local provider; optional merge flow could be added
+            log.info("User has LOCAL provider, keeping existing provider")
         } else {
             if (user.profileImageUrl == null && profile.profile_image != null) {
+                log.info("Updating profile image for user: ${user.id}")
                 user.profileImageUrl = profile.profile_image
             }
             if (user.nickname.isBlank() && profile.nickname != null) {
+                log.info("Updating nickname for user: ${user.id}")
                 user.nickname = profile.nickname
             }
             if (user.providerId == null) {
+                log.info("Setting providerId for user: ${user.id}")
                 user.providerId = profile.id
             }
         }
 
         val saved = userRepository.save(user)
-        return issueTokens(saved)
+        log.info("User saved successfully - id: ${saved.id}, email: ${saved.email}, isNewUser: $isNewUser")
+
+        val tokens = issueTokens(saved)
+        log.info("Tokens issued successfully for user: ${saved.id}")
+
+        return tokens
     }
 
     @Transactional(readOnly = true)
