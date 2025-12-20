@@ -10,6 +10,7 @@ import com.tripmuse.exception.ForbiddenException
 import com.tripmuse.exception.NotFoundException
 import com.tripmuse.repository.CommentReadRepository
 import com.tripmuse.repository.CommentRepository
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -86,6 +87,7 @@ class CommentService(
      * 미디어 상세 화면 진입 시 호출
      */
     @Transactional
+    @CacheEvict(cacheNames = ["albumMedia"], allEntries = true)
     fun markCommentsAsRead(mediaId: Long, userId: Long) {
         val media = mediaService.findMediaById(mediaId)
         val user = userService.findUserById(userId)

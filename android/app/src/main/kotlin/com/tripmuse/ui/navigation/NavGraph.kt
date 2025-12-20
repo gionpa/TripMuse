@@ -370,7 +370,11 @@ fun TripMuseNavHost(
                 MediaDetailScreen(
                     initialMediaId = mediaId,
                     mediaIds = mediaIds,
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = {
+                        // 미디어 상세에서 돌아올 때 앨범 미디어 목록 새로고침 (댓글 읽음 상태 반영)
+                        navController.previousBackStackEntry?.savedStateHandle?.set("refreshAlbumKey", System.currentTimeMillis())
+                        navController.popBackStack()
+                    }
                 )
             }
 

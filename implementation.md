@@ -437,9 +437,249 @@ android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
 
 ---
 
+---
+
+### 9. JWT 인증 시스템
+
+#### 구현 내용
+- 이메일/비밀번호 로그인 및 회원가입
+- 네이버 소셜 로그인 (OAuth2)
+- JWT Access Token / Refresh Token 관리
+- 토큰 자동 갱신 (401 응답 시)
+
+#### 백엔드 구조
+**AuthController** (`backend/.../auth/AuthController.kt`)
+```kotlin
+@PostMapping("/login")
+fun login(@RequestBody request: LoginRequest): ResponseEntity<AuthResponse>
+
+@PostMapping("/signup")
+fun signup(@RequestBody request: SignupRequest): ResponseEntity<AuthResponse>
+
+@PostMapping("/naver")
+fun loginWithNaver(@RequestBody request: NaverLoginRequest): ResponseEntity<AuthResponse>
+
+@PostMapping("/refresh")
+fun refresh(@RequestBody request: RefreshRequest): ResponseEntity<AuthResponse>
+```
+
+**JwtTokenProvider** (`backend/.../security/JwtTokenProvider.kt`)
+- Access Token: 1시간 유효
+- Refresh Token: 7일 유효
+- Redis에 Refresh Token 저장
+
+#### Android 구조
+**TokenManager** (`android/.../data/auth/TokenManager.kt`)
+- DataStore를 사용한 토큰 영구 저장
+- Flow 기반 비동기 토큰 접근
+
+**TokenRefreshAuthenticator** (`android/.../data/auth/TokenRefreshAuthenticator.kt`)
+- OkHttp Authenticator로 401 응답 시 자동 토큰 갱신
+- 갱신 실패 시 로그아웃 처리
+
+**AuthInterceptor** (`android/.../data/auth/AuthInterceptor.kt`)
+- 모든 요청에 Authorization 헤더 자동 추가
+- 403 응답 시 토큰 클리어 및 로그아웃
+
+---
+
+### 10. 네이버 소셜 로그인
+
+#### 구현 내용
+- 네이버 로그인 SDK 연동 (Android)
+- 백엔드에서 네이버 API로 사용자 정보 조회
+- 기존 사용자 연동 또는 신규 사용자 생성
+
+#### Android 설정
+**MainActivity.kt**
+```kotlin
+// Naver SDK 초기화
+NaverIdLoginSDK.initialize(
+    context = this,
+    clientId = getString(R.string.naver_client_id),
+    clientSecret = getString(R.string.naver_client_secret),
+    clientName = getString(R.string.naver_client_name)
+)
+
+// 로그인 콜백
+NaverIdLoginSDK.authenticate(this, oauthLoginCallback)
+```
+
+**strings.xml** (값은 네이버 개발자 센터에서 발급)
+```xml
+<string name="naver_client_id">YOUR_CLIENT_ID</string>
+<string name="naver_client_secret">YOUR_CLIENT_SECRET</string>
+<string name="naver_client_name">TripMuse</string>
+```
+
+#### 백엔드 설정
+**NaverOAuthClient** (`backend/.../client/NaverOAuthClient.kt`)
+```kotlin
+fun fetchUserInfo(accessToken: String): NaverUserInfo? {
+    return webClient.get()
+        .uri("/v1/nid/me")
+        .header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken")
+        .retrieve()
+        .bodyToMono<NaverUserInfoResponse>()
+        .timeout(Duration.ofSeconds(10))
+        .block()
+        ?.response
+}
+```
+
+**AuthService.loginWithNaver()** - 네이버 로그인 처리
+1. 네이버 API로 사용자 정보 조회
+2. 이메일로 기존 사용자 검색
+3. 없으면 새 사용자 생성 (Provider: NAVER)
+4. JWT 토큰 발급
+
+---
+
+### 11. 친구 시스템
+
+#### 구현 내용
+- 닉네임/이메일로 사용자 검색
+- 친구 요청 전송/수락/거절
+- 친구 목록 조회
+- 앨범 공유 (친구에게 앨범 멤버 추가)
+
+#### API 엔드포인트
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| GET | `/friends` | 친구 목록 조회 |
+| GET | `/friends/search?query=` | 사용자 검색 |
+| GET | `/friends/requests` | 받은 친구 요청 |
+| POST | `/friends/request` | 친구 요청 전송 |
+| POST | `/friends/accept/{id}` | 친구 요청 수락 |
+| POST | `/friends/reject/{id}` | 친구 요청 거절 |
+
+#### 데이터 모델
+**Friendship Entity**
+```kotlin
+@Entity
+data class Friendship(
+    val userId: Long,
+    val friendId: Long,
+    val status: FriendshipStatus  // PENDING, ACCEPTED, REJECTED
+)
+```
+
+---
+
+### 12. 앨범 공유 기능
+
+#### 구현 내용
+- 앨범에 멤버 추가/제거
+- 앨범 멤버 권한 관리 (OWNER, EDITOR, VIEWER)
+- 공유된 앨범 목록 조회
+
+#### API 엔드포인트
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| GET | `/albums/{id}/members` | 앨범 멤버 목록 |
+| POST | `/albums/{id}/members` | 멤버 추가 |
+| DELETE | `/albums/{id}/members/{userId}` | 멤버 제거 |
+
+#### 데이터 모델
+**AlbumMember Entity**
+```kotlin
+@Entity
+data class AlbumMember(
+    val albumId: Long,
+    val userId: Long,
+    val role: AlbumRole  // OWNER, EDITOR, VIEWER
+)
+```
+
+---
+
+### 13. UI 테마 (라이트 모드 고정)
+
+#### 구현 내용
+- 시스템 다크모드 설정과 무관하게 항상 라이트 테마 사용
+- 일관된 사용자 경험 제공
+
+#### 변경사항
+**Theme.kt** (`android/.../ui/theme/Theme.kt`)
+```kotlin
+@Composable
+fun TripMuseTheme(
+    darkTheme: Boolean = false,  // 항상 false
+    content: @Composable () -> Unit
+) {
+    val colorScheme = LightColorScheme  // 항상 라이트 테마
+    // ...
+}
+```
+
+---
+
+### 14. 네이버 로그인 안정성 개선
+
+#### 구현 내용
+- WebClient 타임아웃 설정 (10초)
+- 상세 로깅 추가로 디버깅 용이성 향상
+- 예외 처리 강화
+
+#### 변경사항
+**NaverOAuthClient.kt**
+```kotlin
+private val httpClient = HttpClient.create()
+    .responseTimeout(Duration.ofSeconds(10))
+
+fun fetchUserInfo(accessToken: String): NaverUserInfo? {
+    log.info("Fetching Naver user info with token: ${accessToken.take(10)}...")
+
+    return try {
+        val response = webClient.get()
+            .uri("/v1/nid/me")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken")
+            .retrieve()
+            .bodyToMono<NaverUserInfoResponse>()
+            .timeout(Duration.ofSeconds(10))
+            .block()
+        // ... 로깅 및 검증
+    } catch (e: WebClientResponseException) {
+        log.error("Naver API HTTP error - status: ${e.statusCode}", e)
+        null
+    } catch (e: Exception) {
+        log.error("Naver API error - ${e.javaClass.simpleName}: ${e.message}", e)
+        null
+    }
+}
+```
+
+**AuthService.kt** - 상세 로깅 추가
+```kotlin
+fun loginWithNaver(request: NaverLoginRequest): AuthResponse {
+    log.info("Naver login attempt with token: ${request.accessToken.take(10)}...")
+    // ... 각 단계별 로깅
+    log.info("User saved successfully - id: ${saved.id}, isNewUser: $isNewUser")
+    log.info("Tokens issued successfully for user: ${saved.id}")
+    return tokens
+}
+```
+
+---
+
+## 프로젝트 통계
+
+### 코드량 (LOC)
+| 영역 | 파일 타입 | LOC |
+|------|----------|-----|
+| Backend | Kotlin | 4,508 |
+| Android | Kotlin | 7,625 |
+| Android | XML | 105 |
+| **총합** | - | **12,238** |
+
+---
+
 ## Git 커밋 히스토리 (최근)
 
 ```
+afd2aa9 fix: Improve Naver login stability with timeout and logging
+xxxxxxx feat: Add friend system and album sharing
+xxxxxxx feat: Add JWT authentication with Naver OAuth
 e91f85b Fix video fullscreen playback issue
 32ff854 Add album reorder API and use video first frame for thumbnails
 e171d86 Fix file serving 500 error on Railway
