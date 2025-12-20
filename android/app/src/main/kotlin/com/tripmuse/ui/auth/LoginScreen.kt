@@ -154,6 +154,47 @@ fun LoginScreen(
                         .padding(top = 12.dp)
                 )
 
+                if (uiState.mode == AuthMode.SIGNUP) {
+                    OutlinedTextField(
+                        value = uiState.confirmPassword,
+                        onValueChange = viewModel::updateConfirmPassword,
+                        label = {
+                            Text(
+                                "비밀번호 확인",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = labelTextColor
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.Lock,
+                                contentDescription = null,
+                                tint = labelTextColor
+                            )
+                        },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = darkTextColor,
+                            unfocusedTextColor = darkTextColor,
+                            focusedBorderColor = primaryBlue,
+                            unfocusedBorderColor = Color(0xFF9E9E9E),
+                            focusedLabelColor = primaryBlue,
+                            unfocusedLabelColor = labelTextColor,
+                            cursorColor = primaryBlue
+                        ),
+                        isError = uiState.confirmPassword.isNotEmpty() && uiState.password != uiState.confirmPassword,
+                        supportingText = if (uiState.confirmPassword.isNotEmpty() && uiState.password != uiState.confirmPassword) {
+                            { Text("비밀번호가 일치하지 않습니다", color = Color(0xFFD32F2F)) }
+                        } else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                    )
+                }
+
                 if (uiState.error != null) {
                     Text(
                         text = uiState.error ?: "",

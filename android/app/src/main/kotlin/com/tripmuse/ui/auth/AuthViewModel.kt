@@ -14,6 +14,7 @@ import javax.inject.Inject
 data class AuthUiState(
     val email: String = "",
     val password: String = "",
+    val confirmPassword: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
     val mode: AuthMode = AuthMode.LOGIN
@@ -40,9 +41,13 @@ class AuthViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(password = password, error = null)
     }
 
+    fun updateConfirmPassword(confirmPassword: String) {
+        _uiState.value = _uiState.value.copy(confirmPassword = confirmPassword, error = null)
+    }
+
     fun toggleMode() {
         val next = if (_uiState.value.mode == AuthMode.LOGIN) AuthMode.SIGNUP else AuthMode.LOGIN
-        _uiState.value = _uiState.value.copy(mode = next, error = null)
+        _uiState.value = _uiState.value.copy(mode = next, error = null, confirmPassword = "")
     }
 
     fun authenticate(onSuccess: () -> Unit) {
@@ -52,6 +57,10 @@ class AuthViewModel @Inject constructor(
         val nickname = email.substringBefore("@", "TripMuse User").ifBlank { "TripMuse User" }
         if (email.isBlank() || password.isBlank()) {
             _uiState.value = state.copy(error = "이메일과 비밀번호를 입력하세요.")
+            return
+        }
+        if (state.mode == AuthMode.SIGNUP && password != state.confirmPassword) {
+            _uiState.value = state.copy(error = "비밀번호가 일치하지 않습니다.")
             return
         }
         viewModelScope.launch {

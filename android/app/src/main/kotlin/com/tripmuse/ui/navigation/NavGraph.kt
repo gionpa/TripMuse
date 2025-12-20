@@ -281,8 +281,8 @@ fun TripMuseNavHost(
 
             composable(Screen.Recommendation.route) {
                 RecommendationScreen(
-                    onCreateAlbumClick = {
-                        navController.navigate(Screen.AlbumCreate.route)
+                    onNavigateToAlbum = { albumId ->
+                        navController.navigate(Screen.AlbumDetail.createRoute(albumId))
                     }
                 )
             }
