@@ -11,6 +11,7 @@ import com.tripmuse.dto.response.MediaListResponse
 import com.tripmuse.dto.response.MediaResponse
 import com.tripmuse.exception.BadRequestException
 import com.tripmuse.exception.NotFoundException
+import com.tripmuse.repository.CommentReadRepository
 import com.tripmuse.repository.CommentRepository
 import com.tripmuse.repository.MediaRepository
 import org.springframework.cache.annotation.CacheEvict
@@ -30,6 +31,7 @@ import java.util.UUID
 class MediaService(
     private val mediaRepository: MediaRepository,
     private val commentRepository: CommentRepository,
+    private val commentReadRepository: CommentReadRepository,
     private val albumService: AlbumService,
     private val storageService: StorageService,
     private val geocodingService: GeocodingService
@@ -67,10 +69,38 @@ class MediaService(
 
         val mediaList = mediaPage.content
 
+        // 읽지 않은 댓글 상태 배치 조회
+        val mediaIds = mediaList.map { it.id }
+        val unreadStatusMap = getUnreadCommentStatusBatch(mediaIds, userId)
+
         return MediaListResponse(mediaList.map { media ->
             val locationName = geocodingService.reverseGeocode(media.latitude, media.longitude)
-            MediaResponse.from(media, locationName)
+            val hasUnread = unreadStatusMap[media.id] ?: false
+            MediaResponse.from(media, locationName, hasUnread)
         })
+    }
+
+    /**
+     * 여러 미디어의 읽지 않은 댓글 존재 여부를 배치로 조회
+     */
+    private fun getUnreadCommentStatusBatch(mediaIds: List<Long>, userId: Long): Map<Long, Boolean> {
+        if (mediaIds.isEmpty()) return emptyMap()
+
+        val readRecords = commentReadRepository.findByUserIdAndMediaIdIn(userId, mediaIds)
+        val readMap = readRecords.associateBy { it.media.id }
+
+        val result = mutableMapOf<Long, Boolean>()
+        for (mediaId in mediaIds) {
+            val readRecord = readMap[mediaId]
+            val hasUnread = if (readRecord != null) {
+                commentReadRepository.countUnreadComments(mediaId, userId, readRecord.lastReadAt) > 0
+            } else {
+                commentReadRepository.countOtherUsersComments(mediaId, userId) > 0
+            }
+            result[mediaId] = hasUnread
+        }
+
+        return result
     }
 
     @Cacheable(

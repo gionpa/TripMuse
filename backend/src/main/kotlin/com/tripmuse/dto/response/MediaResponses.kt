@@ -20,10 +20,16 @@ data class MediaResponse(
     val locationName: String?,
     val takenAt: LocalDateTime?,
     val isCover: Boolean,
+    val hasUnreadComments: Boolean,
     val createdAt: LocalDateTime
 ) {
     companion object {
-        fun from(media: Media, locationName: String? = null, baseUrl: String = "/media/files"): MediaResponse {
+        fun from(
+            media: Media,
+            locationName: String? = null,
+            hasUnreadComments: Boolean = false,
+            baseUrl: String = "/media/files"
+        ): MediaResponse {
             return MediaResponse(
                 id = media.id,
                 type = media.type,
@@ -39,6 +45,7 @@ data class MediaResponse(
                 locationName = locationName,
                 takenAt = media.takenAt,
                 isCover = media.isCover,
+                hasUnreadComments = hasUnreadComments,
                 createdAt = media.createdAt
             )
         }

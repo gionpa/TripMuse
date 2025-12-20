@@ -54,4 +54,17 @@ class CommentController(
         commentService.deleteComment(commentId, user.id)
         return ResponseEntity.noContent().build()
     }
+
+    /**
+     * 미디어의 댓글을 읽음으로 표시
+     * 미디어 상세 화면 진입 시 호출
+     */
+    @PostMapping("/media/{mediaId}/comments/read")
+    fun markCommentsAsRead(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable mediaId: Long
+    ): ResponseEntity<Void> {
+        commentService.markCommentsAsRead(mediaId, user.id)
+        return ResponseEntity.ok().build()
+    }
 }

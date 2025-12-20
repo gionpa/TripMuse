@@ -157,6 +157,11 @@ interface TripMuseApi {
         @Path("commentId") commentId: Long
     ): Response<Unit>
 
+    @POST("media/{mediaId}/comments/read")
+    suspend fun markCommentsAsRead(
+        @Path("mediaId") mediaId: Long
+    ): Response<Unit>
+
     // Recommendations
     @POST("recommendations/analyze")
     suspend fun analyzeMedia(

@@ -61,4 +61,17 @@ class CommentRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    suspend fun markCommentsAsRead(mediaId: Long): Result<Unit> {
+        return try {
+            val response = api.markCommentsAsRead(mediaId)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to mark comments as read: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

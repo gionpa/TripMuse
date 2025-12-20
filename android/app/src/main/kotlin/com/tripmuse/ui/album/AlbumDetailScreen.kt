@@ -474,6 +474,26 @@ fun MediaThumbnail(
             }
         }
 
+        // Unread comments badge
+        if (media.hasUnreadComments) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp),
+                shape = MaterialTheme.shapes.extraSmall,
+                color = MaterialTheme.colorScheme.error
+            ) {
+                Icon(
+                    Icons.Default.ChatBubble,
+                    contentDescription = "새 댓글",
+                    modifier = Modifier
+                        .size(16.dp)
+                        .padding(2.dp),
+                    tint = MaterialTheme.colorScheme.onError
+                )
+            }
+        }
+
         // Context menu - 항상 표시, isOwner가 아니면 메뉴 항목 비활성화
         DropdownMenu(
             expanded = showContextMenu,

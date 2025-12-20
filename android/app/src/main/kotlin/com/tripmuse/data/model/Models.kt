@@ -88,6 +88,7 @@ data class Media(
     val locationName: String?,
     val takenAt: String?,
     val isCover: Boolean = false,
+    val hasUnreadComments: Boolean = false,
     val createdAt: String
 )
 
