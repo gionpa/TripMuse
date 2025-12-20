@@ -33,6 +33,7 @@ class CommentService(
     }
 
     @Transactional
+    @CacheEvict(cacheNames = ["albumMedia"], allEntries = true)
     fun createComment(mediaId: Long, userId: Long, request: CreateCommentRequest): CommentResponse {
         val media = mediaService.findMediaById(mediaId)
         val user = userService.findUserById(userId)
@@ -63,6 +64,7 @@ class CommentService(
     }
 
     @Transactional
+    @CacheEvict(cacheNames = ["albumMedia"], allEntries = true)
     fun deleteComment(commentId: Long, userId: Long) {
         val comment = findCommentById(commentId)
 
