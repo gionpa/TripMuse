@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.tripmuse.R
 import com.tripmuse.data.model.Album
+import com.tripmuse.data.model.AlbumVisibility
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import kotlin.math.roundToInt
@@ -401,6 +402,38 @@ fun AlbumCard(
                                 text = album.title.take(1),
                                 style = MaterialTheme.typography.displaySmall,
                                 color = Color(0xFF5B7FFF)  // Modern blue text
+                            )
+                        }
+                    }
+                }
+
+                // 내 앨범이면서 공개 설정된 경우 좌측 상단에 공개 범위 표시
+                if (album.isOwner && album.visibility != AlbumVisibility.PRIVATE) {
+                    val (icon, label, bgColor) = when (album.visibility) {
+                        AlbumVisibility.FRIENDS_ONLY -> Triple("👥", "친구 공개", Color(0xFF4A90D9))
+                        AlbumVisibility.PUBLIC -> Triple("🌐", "전체 공개", Color(0xFF4CAF50))
+                        else -> Triple("", "", Color.Transparent)
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp),
+                        color = bgColor.copy(alpha = 0.85f),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = icon,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White
                             )
                         }
                     }
