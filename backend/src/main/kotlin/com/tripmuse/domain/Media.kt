@@ -62,6 +62,9 @@ class Media(
     @OneToMany(mappedBy = "media", cascade = [CascadeType.ALL], orphanRemoval = true)
     val comments: MutableList<Comment> = mutableListOf()
 
+    @OneToMany(mappedBy = "media", cascade = [CascadeType.ALL], orphanRemoval = true)
+    val commentReads: MutableList<CommentRead> = mutableListOf()
+
     fun updateThumbnail(thumbnailPath: String) {
         this.thumbnailPath = thumbnailPath
     }

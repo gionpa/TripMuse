@@ -1,5 +1,6 @@
 package com.tripmuse.ui.home
 
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tripmuse.data.model.Album
@@ -32,6 +33,9 @@ class HomeViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    // 스크롤 위치 유지를 위한 LazyGridState
+    val gridState = LazyGridState()
 
     init {
         loadAlbums()
@@ -125,29 +129,34 @@ class HomeViewModel @Inject constructor(
     }
 
     fun moveAlbum(fromIndex: Int, toIndex: Int) {
-        val currentAlbums = _uiState.value.albums.toMutableList()
-        if (fromIndex in currentAlbums.indices && toIndex in currentAlbums.indices) {
-            val item = currentAlbums.removeAt(fromIndex)
-            currentAlbums.add(toIndex, item)
-            _uiState.value = _uiState.value.copy(
-                albums = currentAlbums,
-                filteredAlbums = applyFilters(
-                    currentAlbums,
-                    _uiState.value.searchQuery,
-                    _uiState.value.selectedTab
-                )
-            )
+        // 내 앨범 탭에서만 순서 변경 가능
+        if (_uiState.value.selectedTab != AlbumTab.MINE) return
 
-            // Save new order to server
-            viewModelScope.launch {
-                val albumIds = currentAlbums.map { it.id }
-                albumRepository.reorderAlbums(albumIds)
-                    .onFailure { e ->
-                        _uiState.value = _uiState.value.copy(
-                            error = e.message ?: "Failed to save album order"
-                        )
-                    }
-            }
+        val currentFiltered = _uiState.value.filteredAlbums.toMutableList()
+        if (fromIndex !in currentFiltered.indices || toIndex !in currentFiltered.indices) return
+
+        // filteredAlbums에서 순서 변경
+        val item = currentFiltered.removeAt(fromIndex)
+        currentFiltered.add(toIndex, item)
+
+        // 전체 albums 리스트도 업데이트 (내 앨범만 새 순서로 교체)
+        val sharedAlbums = _uiState.value.albums.filter { !it.isOwner }
+        val newAlbums = currentFiltered + sharedAlbums
+
+        _uiState.value = _uiState.value.copy(
+            albums = newAlbums,
+            filteredAlbums = currentFiltered
+        )
+
+        // 서버에 내 앨범 순서만 저장
+        viewModelScope.launch {
+            val myAlbumIds = currentFiltered.map { it.id }
+            albumRepository.reorderAlbums(myAlbumIds)
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        error = e.message ?: "Failed to save album order"
+                    )
+                }
         }
     }
 
