@@ -37,6 +37,7 @@ data class Album(
     val coverImageUrl: String?,
     val visibility: AlbumVisibility,
     val mediaCount: Long,
+    val owner: User? = null,
     val isOwner: Boolean = true,
     val createdAt: String,
     val updatedAt: String

@@ -16,6 +16,7 @@ data class AlbumResponse(
     val coverImageUrl: String?,
     val visibility: AlbumVisibility,
     val mediaCount: Long,
+    val owner: UserResponse,
     val isOwner: Boolean,
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime
@@ -33,6 +34,7 @@ data class AlbumResponse(
                 coverImageUrl = album.coverImageUrl,
                 visibility = album.visibility ?: AlbumVisibility.PRIVATE,
                 mediaCount = mediaCount,
+                owner = UserResponse.from(album.user),
                 isOwner = album.user.id == requestUserId,
                 createdAt = album.createdAt,
                 updatedAt = album.updatedAt
@@ -52,6 +54,7 @@ data class AlbumResponse(
                 coverImageUrl = album.coverImageUrl,
                 visibility = album.visibility ?: AlbumVisibility.PRIVATE,
                 mediaCount = album.mediaCount,
+                owner = UserResponse.from(album.user),
                 isOwner = album.user.id == requestUserId,
                 createdAt = album.createdAt,
                 updatedAt = album.updatedAt

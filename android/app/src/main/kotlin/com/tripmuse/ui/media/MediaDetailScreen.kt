@@ -806,6 +806,21 @@ fun CommentItem(
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
 
+    // 댓글 시간 포맷팅 (날짜 + 시:분:초, UTC -> KST 변환)
+    val formattedDateTime = remember(comment.createdAt) {
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        runCatching {
+            // 서버가 UTC로 저장하므로, UTC로 파싱 후 KST로 변환
+            LocalDateTime.parse(comment.createdAt)
+                .atZone(ZoneId.of("UTC"))
+                .withZoneSameInstant(ZoneId.of("Asia/Seoul"))
+                .toLocalDateTime()
+                .format(formatter)
+        }.getOrElse {
+            comment.createdAt.replace("T", " ").take(19)
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -851,7 +866,7 @@ fun CommentItem(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = comment.createdAt.take(10),
+                    text = formattedDateTime,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

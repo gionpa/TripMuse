@@ -406,6 +406,57 @@ fun AlbumCard(
                     }
                 }
 
+                // 공유받은 앨범인 경우 소유자 정보 표시
+                if (!album.isOwner && album.owner != null) {
+                    val owner = album.owner
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp),
+                        color = Color.Black.copy(alpha = 0.6f),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 프로필 이미지
+                            if (owner.profileImageUrl != null) {
+                                AsyncImage(
+                                    model = owner.profileImageUrl,
+                                    contentDescription = "프로필",
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(MaterialTheme.shapes.extraSmall),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Surface(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color(0xFF5B7FFF),
+                                    shape = MaterialTheme.shapes.extraSmall
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = owner.nickname.take(1),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = owner.nickname,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
                 // More options
                 if (showMenu) {
                     Box(
