@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 
 data class ErrorResponse(
@@ -60,6 +61,22 @@ class GlobalExceptionHandler {
         return ResponseEntity
             .status(HttpStatus.NOT_FOUND)
             .body(ErrorResponse("NOT_FOUND", "Resource not found: ${e.resourcePath}"))
+    }
+
+    @ExceptionHandler(ResponseStatusException::class)
+    fun handleResponseStatusException(e: ResponseStatusException): ResponseEntity<ErrorResponse> {
+        val statusCode = e.statusCode.value()
+        val errorCode = when (statusCode) {
+            400 -> "BAD_REQUEST"
+            401 -> "UNAUTHORIZED"
+            403 -> "FORBIDDEN"
+            404 -> "NOT_FOUND"
+            409 -> "CONFLICT"
+            else -> "ERROR"
+        }
+        return ResponseEntity
+            .status(e.statusCode)
+            .body(ErrorResponse(errorCode, e.reason ?: "Error occurred"))
     }
 
     @ExceptionHandler(Exception::class)
