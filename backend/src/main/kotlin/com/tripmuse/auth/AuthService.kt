@@ -33,7 +33,7 @@ class AuthService(
     @Transactional
     fun signup(request: SignupRequest): AuthResponse {
         if (userRepository.existsByEmail(request.email)) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Email already exists")
+            throw ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다")
         }
 
         val user = User(
@@ -51,14 +51,14 @@ class AuthService(
     @Transactional(readOnly = true)
     fun login(request: LoginRequest): AuthResponse {
         val user = userRepository.findByEmail(request.email)
-            .orElseThrow { ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials") }
+            .orElseThrow { ResponseStatusException(HttpStatus.UNAUTHORIZED, "존재하지 않는 아이디입니다") }
 
         if (user.provider != Provider.LOCAL) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Use social login for this account")
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "소셜 계정으로 로그인해주세요")
         }
 
         if (user.password == null || !passwordEncoder.matches(request.password, user.password)) {
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials")
+            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "비밀번호가 올바르지 않습니다")
         }
 
         return issueTokens(user)
@@ -71,7 +71,7 @@ class AuthService(
         val profile = naverOAuthClient.fetchUserInfo(request.accessToken)
         if (profile == null) {
             log.error("Failed to fetch Naver user info - token may be invalid or expired")
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Failed to verify Naver token")
+            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "네이버 토큰 인증에 실패했습니다")
         }
 
         log.info("Naver profile fetched - id: ${profile.id}, email: ${profile.email}, nickname: ${profile.nickname}")
@@ -79,7 +79,7 @@ class AuthService(
         val email = profile.email
         if (email == null) {
             log.error("Naver profile missing email - id: ${profile.id}")
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required from Naver")
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "네이버 계정에서 이메일 정보를 가져올 수 없습니다")
         }
 
         val existingUser = userRepository.findByEmail(email)
@@ -129,15 +129,15 @@ class AuthService(
     fun refresh(request: RefreshRequest): AuthResponse {
         val refreshToken = request.refreshToken
         if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token")
+            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다")
         }
         val userId = jwtTokenProvider.getUserId(refreshToken)
         val stored = redisTemplate.opsForValue().get(refreshKey(userId))
         if (stored == null || stored != refreshToken) {
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token not found")
+            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "토큰을 찾을 수 없습니다")
         }
         val user = userRepository.findById(userId)
-            .orElseThrow { ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found") }
+            .orElseThrow { ResponseStatusException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다") }
         return issueTokens(user)
     }
 

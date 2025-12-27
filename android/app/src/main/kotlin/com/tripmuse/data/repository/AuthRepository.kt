@@ -49,13 +49,28 @@ class AuthRepository @Inject constructor(
                 tokenManager.saveTokens(body.accessToken, body.refreshToken)
                 Result.success(body)
             } else {
-                val errorMessage = when (response.code()) {
-                    401 -> "이메일 또는 비밀번호가 올바르지 않습니다."
-                    403 -> "접근이 거부되었습니다."
-                    404 -> "사용자를 찾을 수 없습니다."
-                    409 -> "이미 등록된 이메일입니다."
-                    500 -> "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
-                    else -> "인증 실패: ${response.code()}"
+                // 백엔드에서 반환하는 구체적인 에러 메시지 사용
+                val errorBody = response.errorBody()?.string()
+                val errorMessage = if (errorBody != null && errorBody.isNotEmpty()) {
+                    try {
+                        // Spring의 ResponseStatusException은 "message" 필드에 에러 메시지를 담아 반환
+                        val jsonStart = errorBody.indexOf("\"message\":")
+                        if (jsonStart != -1) {
+                            val msgStart = errorBody.indexOf("\"", jsonStart + 10) + 1
+                            val msgEnd = errorBody.indexOf("\"", msgStart)
+                            if (msgEnd > msgStart) {
+                                errorBody.substring(msgStart, msgEnd)
+                            } else {
+                                getDefaultErrorMessage(response.code())
+                            }
+                        } else {
+                            getDefaultErrorMessage(response.code())
+                        }
+                    } catch (e: Exception) {
+                        getDefaultErrorMessage(response.code())
+                    }
+                } else {
+                    getDefaultErrorMessage(response.code())
                 }
                 Result.failure(Exception(errorMessage))
             }
@@ -69,6 +84,17 @@ class AuthRepository @Inject constructor(
             Result.failure(Exception("서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요."))
         } catch (e: Exception) {
             Result.failure(Exception("네트워크 오류: ${e.localizedMessage ?: "알 수 없는 오류"}"))
+        }
+    }
+
+    private fun getDefaultErrorMessage(code: Int): String {
+        return when (code) {
+            401 -> "이메일 또는 비밀번호가 올바르지 않습니다."
+            403 -> "접근이 거부되었습니다."
+            404 -> "사용자를 찾을 수 없습니다."
+            409 -> "이미 등록된 이메일입니다."
+            500 -> "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+            else -> "인증 실패: $code"
         }
     }
 }
