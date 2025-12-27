@@ -45,7 +45,7 @@ class Media(
     @Column(length = 255)
     val originalFilename: String? = null,
 
-    val fileSize: Long? = null,
+    var fileSize: Long? = null,
 
     @Column(precision = 10)
     val latitude: Double? = null,

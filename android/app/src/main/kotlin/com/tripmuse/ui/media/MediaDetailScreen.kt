@@ -234,6 +234,7 @@ private fun MediaDetailPageContent(
                         item {
                             MediaViewer(
                                 fileUrl = uiState.media!!.fileUrl,
+                                thumbnailUrl = uiState.media!!.thumbnailUrl,
                                 mediaType = uiState.media!!.type
                             )
                         }
@@ -308,9 +309,11 @@ private fun MediaDetailPageContent(
 @Composable
 fun MediaViewer(
     fileUrl: String,
+    thumbnailUrl: String?,
     mediaType: MediaType
 ) {
     var showFullscreen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Box(
         modifier = Modifier
@@ -319,8 +322,21 @@ fun MediaViewer(
             .clickable { showFullscreen = true }
     ) {
         if (mediaType == MediaType.IMAGE) {
+            // Progressive loading: 썸네일을 placeholder로 사용하여 원본 로드
+            val imageRequest = remember(fileUrl, thumbnailUrl) {
+                ImageRequest.Builder(context)
+                    .data(fileUrl)
+                    .crossfade(true)
+                    .apply {
+                        // 썸네일이 있으면 placeholder로 사용 (빠른 로딩)
+                        if (thumbnailUrl != null) {
+                            placeholderMemoryCacheKey(thumbnailUrl)
+                        }
+                    }
+                    .build()
+            }
             AsyncImage(
-                model = fileUrl,
+                model = imageRequest,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit

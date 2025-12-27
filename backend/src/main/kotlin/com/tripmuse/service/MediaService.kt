@@ -196,11 +196,13 @@ class MediaService(
         // 동기식 업로드: 파일 저장 및 썸네일 생성을 바로 처리
         // 이렇게 하면 API 응답 시점에 이미 COMPLETED 상태가 됨
         var thumbnailPath: String? = null
+        var actualFileSize = file.size  // 압축 후 실제 파일 크기
         try {
             when (mediaType) {
                 MediaType.IMAGE -> {
                     if (fileBytes != null) {
-                        storageService.storeImageBytesAtPath(fileBytes, filePath)
+                        // 이미지 압축 저장 (최대 2048px, JPEG 85%)
+                        actualFileSize = storageService.storeImageBytesAtPath(fileBytes, filePath)
                         thumbnailPath = storageService.generateImageThumbnail(filePath)
                     }
                 }
@@ -209,7 +211,7 @@ class MediaService(
                     thumbnailPath = storageService.generateVideoThumbnail(filePath)
                 }
             }
-            logger.info("File stored and thumbnail generated: filePath=$filePath, thumbnailPath=$thumbnailPath")
+            logger.info("File stored and thumbnail generated: filePath=$filePath, thumbnailPath=$thumbnailPath, actualSize=$actualFileSize")
         } catch (e: Exception) {
             logger.error("Failed to store file or generate thumbnail for ${file.originalFilename}", e)
             // 썸네일 생성 실패해도 파일은 저장됨, 계속 진행
@@ -222,7 +224,7 @@ class MediaService(
             filePath = filePath,
             thumbnailPath = thumbnailPath,
             originalFilename = file.originalFilename,
-            fileSize = file.size,
+            fileSize = actualFileSize,  // 압축된 실제 파일 크기 저장
             latitude = finalLatitude,
             longitude = finalLongitude,
             takenAt = finalTakenAt

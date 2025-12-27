@@ -220,6 +220,6 @@ data class StorageUsage(
     val usagePercent: Double
 ) {
     companion object {
-        const val MAX_STORAGE_BYTES: Long = 500 * 1024 * 1024 // 500MB
+        const val MAX_STORAGE_BYTES: Long = 1024 * 1024 * 1024 // 1GB
     }
 }

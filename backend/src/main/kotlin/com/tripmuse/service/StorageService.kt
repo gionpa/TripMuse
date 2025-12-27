@@ -22,7 +22,10 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.util.UUID
 import javax.imageio.ImageIO
+import javax.imageio.IIOImage
+import javax.imageio.ImageWriteParam
 import jakarta.annotation.PostConstruct
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 @Service
@@ -36,6 +39,9 @@ class StorageService(
     companion object {
         const val THUMBNAIL_WIDTH = 300
         const val THUMBNAIL_HEIGHT = 300
+        const val COMPRESSED_MAX_WIDTH = 2048
+        const val COMPRESSED_MAX_HEIGHT = 2048
+        const val JPEG_QUALITY = 0.85f  // 85% 품질 (육안으로 차이 거의 없음)
     }
 
     @PostConstruct
@@ -179,7 +185,11 @@ class StorageService(
         return "images/$storedFilename"
     }
 
-    fun storeImageBytesAtPath(fileBytes: ByteArray, relativePath: String) {
+    /**
+     * 이미지를 압축하여 저장 (최대 2048px, JPEG 85% 품질)
+     * @return 압축 후 파일 크기 (bytes)
+     */
+    fun storeImageBytesAtPath(fileBytes: ByteArray, relativePath: String): Long {
         if (fileBytes.isEmpty()) {
             throw StorageException("Failed to store empty file")
         }
@@ -200,14 +210,28 @@ class StorageService(
                 val orientation = getExifOrientation(fileBytes)
                 val correctedImage = applyExifOrientation(originalImage, orientation)
 
+                // 리사이즈 및 압축 적용
+                val resizedImage = resizeIfNeeded(correctedImage, COMPRESSED_MAX_WIDTH, COMPRESSED_MAX_HEIGHT)
+
                 val formatName = when (extension.lowercase()) {
                     "png" -> "png"
                     "gif" -> "gif"
                     else -> "jpg"
                 }
-                ImageIO.write(correctedImage, formatName, targetPath.toFile())
 
-                logger.info("Image stored with orientation correction at path: $relativePath")
+                // JPEG인 경우 품질 조절하여 저장
+                if (formatName == "jpg") {
+                    writeJpegWithQuality(resizedImage, targetPath, JPEG_QUALITY)
+                } else {
+                    ImageIO.write(resizedImage, formatName, targetPath.toFile())
+                }
+
+                val savedSize = Files.size(targetPath)
+                val originalSize = fileBytes.size
+                val compressionRatio = if (originalSize > 0) ((1 - savedSize.toDouble() / originalSize) * 100).toInt() else 0
+                logger.info("Image compressed and stored: $relativePath (${originalSize/1024}KB -> ${savedSize/1024}KB, $compressionRatio% 절감)")
+
+                return savedSize
             } else {
                 Files.write(
                     targetPath,
@@ -217,6 +241,7 @@ class StorageService(
                     StandardOpenOption.WRITE
                 )
                 logger.info("Image stored without processing at path: $relativePath (unsupported format)")
+                return fileBytes.size.toLong()
             }
         } catch (e: Exception) {
             try {
@@ -228,10 +253,116 @@ class StorageService(
                     StandardOpenOption.WRITE
                 )
                 logger.warn("Image stored without processing at path: $relativePath due to error: ${e.message}")
+                return fileBytes.size.toLong()
             } catch (writeError: IOException) {
                 throw StorageException("Failed to store image: ${writeError.message}")
             }
         }
+    }
+
+    /**
+     * 이미지가 최대 크기를 초과하면 리사이즈
+     */
+    private fun resizeIfNeeded(image: BufferedImage, maxWidth: Int, maxHeight: Int): BufferedImage {
+        val width = image.width
+        val height = image.height
+
+        // 이미 최대 크기 이하인 경우 그대로 반환
+        if (width <= maxWidth && height <= maxHeight) {
+            return image
+        }
+
+        val widthRatio = maxWidth.toDouble() / width
+        val heightRatio = maxHeight.toDouble() / height
+        val ratio = minOf(widthRatio, heightRatio)
+
+        val targetWidth = (width * ratio).toInt()
+        val targetHeight = (height * ratio).toInt()
+
+        val scaledImage = image.getScaledInstance(targetWidth, targetHeight, Image.SCALE_SMOOTH)
+
+        val imageType = if (image.colorModel.hasAlpha()) BufferedImage.TYPE_INT_ARGB else BufferedImage.TYPE_INT_RGB
+        val resizedImage = BufferedImage(targetWidth, targetHeight, imageType)
+        val graphics = resizedImage.createGraphics()
+        if (!image.colorModel.hasAlpha()) {
+            graphics.color = Color.WHITE
+            graphics.fillRect(0, 0, targetWidth, targetHeight)
+        }
+        graphics.drawImage(scaledImage, 0, 0, null)
+        graphics.dispose()
+
+        logger.info("Image resized: ${width}x${height} -> ${targetWidth}x${targetHeight}")
+        return resizedImage
+    }
+
+    /**
+     * JPEG 품질을 지정하여 저장
+     */
+    private fun writeJpegWithQuality(image: BufferedImage, targetPath: Path, quality: Float) {
+        val writers = ImageIO.getImageWritersByFormatName("jpg")
+        if (!writers.hasNext()) {
+            // fallback
+            ImageIO.write(image, "jpg", targetPath.toFile())
+            return
+        }
+
+        val writer = writers.next()
+        val param = writer.defaultWriteParam
+        param.compressionMode = ImageWriteParam.MODE_EXPLICIT
+        param.compressionQuality = quality
+
+        Files.newOutputStream(targetPath).use { os ->
+            val output = ImageIO.createImageOutputStream(os)
+            writer.output = output
+            writer.write(null, IIOImage(image, null, null), param)
+            writer.dispose()
+            output.close()
+        }
+    }
+
+    /**
+     * 기존 이미지 파일을 압축하여 덮어쓰기 (마이그레이션용)
+     * @return 압축 후 파일 크기 (bytes)
+     */
+    fun compressImageInPlace(relativePath: String, fileBytes: ByteArray): Long {
+        val targetPath = basePath.resolve(relativePath)
+
+        val extension = if (relativePath.contains(".")) {
+            relativePath.substringAfterLast(".")
+        } else {
+            "jpg"
+        }
+
+        try {
+            val originalImage = ImageIO.read(ByteArrayInputStream(fileBytes))
+
+            if (originalImage != null) {
+                val orientation = getExifOrientation(fileBytes)
+                val correctedImage = applyExifOrientation(originalImage, orientation)
+
+                // 리사이즈 및 압축 적용
+                val resizedImage = resizeIfNeeded(correctedImage, COMPRESSED_MAX_WIDTH, COMPRESSED_MAX_HEIGHT)
+
+                val formatName = when (extension.lowercase()) {
+                    "png" -> "png"
+                    "gif" -> "gif"
+                    else -> "jpg"
+                }
+
+                // JPEG인 경우 품질 조절하여 저장
+                if (formatName == "jpg") {
+                    writeJpegWithQuality(resizedImage, targetPath, JPEG_QUALITY)
+                } else {
+                    ImageIO.write(resizedImage, formatName, targetPath.toFile())
+                }
+
+                return Files.size(targetPath)
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to compress image in place: $relativePath - ${e.message}")
+        }
+
+        return fileBytes.size.toLong()
     }
 
     fun storeVideo(file: MultipartFile): String {

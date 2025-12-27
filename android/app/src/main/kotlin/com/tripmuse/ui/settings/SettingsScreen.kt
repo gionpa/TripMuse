@@ -52,7 +52,7 @@ fun SettingsScreen(
                 imageBytes = uiState.storageUsage?.imageBytes ?: 0,
                 videoBytes = uiState.storageUsage?.videoBytes ?: 0,
                 totalBytes = uiState.storageUsage?.totalBytes ?: 0,
-                maxBytes = uiState.storageUsage?.maxBytes ?: (500 * 1024 * 1024),
+                maxBytes = uiState.storageUsage?.maxBytes ?: (1024 * 1024 * 1024),
                 isLoading = uiState.isLoading
             )
         }
