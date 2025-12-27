@@ -46,6 +46,9 @@ interface TripMuseApi {
     @DELETE("users/me/profile-image")
     suspend fun deleteProfileImage(): Response<User>
 
+    @GET("users/me/storage")
+    suspend fun getStorageUsage(): Response<StorageUsage>
+
     // Albums
     @GET("albums")
     suspend fun getAlbums(): Response<AlbumListResponse>

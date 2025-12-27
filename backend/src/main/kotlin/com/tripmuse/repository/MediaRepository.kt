@@ -56,4 +56,12 @@ interface MediaRepository : JpaRepository<Media, Long> {
         fileSize: Long,
         takenAt: java.time.LocalDateTime
     ): Boolean
+
+    // 사용자별 파일 크기 합계 (타입별)
+    @Query("SELECT COALESCE(SUM(m.fileSize), 0) FROM Media m WHERE m.album.user.id = :userId AND m.type = :type")
+    fun sumFileSizeByUserIdAndType(userId: Long, type: MediaType): Long
+
+    // 사용자별 전체 파일 크기 합계
+    @Query("SELECT COALESCE(SUM(m.fileSize), 0) FROM Media m WHERE m.album.user.id = :userId")
+    fun sumFileSizeByUserId(userId: Long): Long
 }

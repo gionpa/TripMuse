@@ -34,7 +34,8 @@ class MediaService(
     private val commentReadRepository: CommentReadRepository,
     private val albumService: AlbumService,
     private val storageService: StorageService,
-    private val geocodingService: GeocodingService
+    private val geocodingService: GeocodingService,
+    private val userService: UserService
 ) {
     private val logger = LoggerFactory.getLogger(MediaService::class.java)
 
@@ -133,6 +134,13 @@ class MediaService(
         clientLongitude: Double? = null,
         clientTakenAt: String? = null
     ): MediaResponse {
+        // 저장공간 용량 체크
+        if (!userService.canUpload(userId, file.size)) {
+            val remaining = userService.getRemainingStorage(userId)
+            val remainingMB = remaining / (1024.0 * 1024.0)
+            throw BadRequestException("저장공간이 부족합니다. 남은 용량: ${String.format("%.1f", remainingMB)}MB")
+        }
+
         val album = albumService.findAlbumByIdAndUserId(albumId, userId)
 
         val contentType = file.contentType

@@ -3,6 +3,7 @@ package com.tripmuse.ui.home
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tripmuse.data.auth.AuthEventManager
 import com.tripmuse.data.model.Album
 import com.tripmuse.data.repository.AlbumRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,7 +29,8 @@ enum class AlbumTab {
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val albumRepository: AlbumRepository
+    private val albumRepository: AlbumRepository,
+    private val authEventManager: AuthEventManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -58,10 +60,15 @@ class HomeViewModel @Inject constructor(
                     )
                 }
                 .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = e.message ?: "Failed to load albums"
-                    )
+                    // 인증 에러인 경우 에러 표시하지 않음 (로그인 화면으로 전환됨)
+                    if (!authEventManager.isAuthError.value) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = e.message ?: "Failed to load albums"
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(isLoading = false)
+                    }
                 }
         }
     }
@@ -121,9 +128,11 @@ class HomeViewModel @Inject constructor(
                     loadAlbums()
                 }
                 .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        error = e.message ?: "Failed to delete album"
-                    )
+                    if (!authEventManager.isAuthError.value) {
+                        _uiState.value = _uiState.value.copy(
+                            error = e.message ?: "Failed to delete album"
+                        )
+                    }
                 }
         }
     }
@@ -153,9 +162,11 @@ class HomeViewModel @Inject constructor(
             val myAlbumIds = currentFiltered.map { it.id }
             albumRepository.reorderAlbums(myAlbumIds)
                 .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        error = e.message ?: "Failed to save album order"
-                    )
+                    if (!authEventManager.isAuthError.value) {
+                        _uiState.value = _uiState.value.copy(
+                            error = e.message ?: "Failed to save album order"
+                        )
+                    }
                 }
         }
     }

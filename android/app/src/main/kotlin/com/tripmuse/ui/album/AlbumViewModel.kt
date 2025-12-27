@@ -2,6 +2,7 @@ package com.tripmuse.ui.album
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tripmuse.data.auth.AuthEventManager
 import com.tripmuse.data.model.AlbumDetail
 import com.tripmuse.data.model.Media
 import com.tripmuse.data.model.MediaType
@@ -34,7 +35,8 @@ enum class MediaFilter {
 @HiltViewModel
 class AlbumViewModel @Inject constructor(
     private val albumRepository: AlbumRepository,
-    private val mediaRepository: MediaRepository
+    private val mediaRepository: MediaRepository,
+    private val authEventManager: AuthEventManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AlbumDetailUiState())
@@ -60,10 +62,14 @@ class AlbumViewModel @Inject constructor(
                     loadMediaPage(albumId, page = 0, append = false)
                 }
                 .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = e.message ?: "Failed to load album"
-                    )
+                    if (!authEventManager.isAuthError.value) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = e.message ?: "Failed to load album"
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(isLoading = false)
+                    }
                 }
         }
     }
@@ -111,11 +117,18 @@ class AlbumViewModel @Inject constructor(
                     .onFailure { e ->
                         // Ignore cancellation exceptions - they're expected when switching tabs
                         if (e is CancellationException) return@onFailure
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            isLoadingMore = false,
-                            error = e.message ?: "Failed to load media"
-                        )
+                        if (!authEventManager.isAuthError.value) {
+                            _uiState.value = _uiState.value.copy(
+                                isLoading = false,
+                                isLoadingMore = false,
+                                error = e.message ?: "Failed to load media"
+                            )
+                        } else {
+                            _uiState.value = _uiState.value.copy(
+                                isLoading = false,
+                                isLoadingMore = false
+                            )
+                        }
                     }
             } catch (e: CancellationException) {
                 // Silently ignore - expected when switching tabs
@@ -156,9 +169,11 @@ class AlbumViewModel @Inject constructor(
                     _uiState.value.album?.let { loadAlbum(it.id) }
                 }
                 .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        error = e.message ?: "Failed to delete media"
-                    )
+                    if (!authEventManager.isAuthError.value) {
+                        _uiState.value = _uiState.value.copy(
+                            error = e.message ?: "Failed to delete media"
+                        )
+                    }
                 }
         }
     }
@@ -167,9 +182,11 @@ class AlbumViewModel @Inject constructor(
         viewModelScope.launch {
             albumRepository.deleteAlbum(albumId)
                 .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        error = e.message ?: "Failed to delete album"
-                    )
+                    if (!authEventManager.isAuthError.value) {
+                        _uiState.value = _uiState.value.copy(
+                            error = e.message ?: "Failed to delete album"
+                        )
+                    }
                 }
         }
     }
@@ -181,9 +198,11 @@ class AlbumViewModel @Inject constructor(
                     _uiState.value.album?.let { loadAlbum(it.id) }
                 }
                 .onFailure { e ->
-                    _uiState.value = _uiState.value.copy(
-                        error = e.message ?: "Failed to set cover image"
-                    )
+                    if (!authEventManager.isAuthError.value) {
+                        _uiState.value = _uiState.value.copy(
+                            error = e.message ?: "Failed to set cover image"
+                        )
+                    }
                 }
         }
     }

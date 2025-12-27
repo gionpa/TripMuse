@@ -1,5 +1,6 @@
 package com.tripmuse.controller
 
+import com.tripmuse.dto.response.StorageUsageResponse
 import com.tripmuse.dto.response.UserResponse
 import com.tripmuse.security.CustomUserDetails
 import com.tripmuse.service.UserService
@@ -37,5 +38,13 @@ class UserController(
     ): ResponseEntity<UserResponse> {
         val updatedUser = userService.deleteProfileImage(user.id)
         return ResponseEntity.ok(updatedUser)
+    }
+
+    @GetMapping("/me/storage")
+    fun getStorageUsage(
+        @AuthenticationPrincipal user: CustomUserDetails
+    ): ResponseEntity<StorageUsageResponse> {
+        val storageUsage = userService.getStorageUsage(user.id)
+        return ResponseEntity.ok(storageUsage)
     }
 }

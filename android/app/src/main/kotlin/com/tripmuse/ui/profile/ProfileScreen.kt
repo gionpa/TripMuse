@@ -29,6 +29,7 @@ import com.tripmuse.data.api.ApiModule
 @Composable
 fun ProfileScreen(
     onLogout: () -> Unit,
+    onNavigateToSettings: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -179,22 +180,7 @@ fun ProfileScreen(
             ProfileMenuCard(
                 icon = Icons.Default.Settings,
                 title = "설정",
-                onClick = { /* TODO */ }
-            )
-            ProfileMenuCard(
-                icon = Icons.Default.Notifications,
-                title = "알림 설정",
-                onClick = { /* TODO */ }
-            )
-            ProfileMenuCard(
-                icon = Icons.Default.Storage,
-                title = "저장공간 관리",
-                onClick = { /* TODO */ }
-            )
-            ProfileMenuCard(
-                icon = Icons.Default.Info,
-                title = "앱 정보",
-                onClick = { /* TODO */ }
+                onClick = onNavigateToSettings
             )
             ProfileMenuCard(
                 icon = Icons.Default.ExitToApp,

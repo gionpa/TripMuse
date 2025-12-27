@@ -210,3 +210,16 @@ data class MediaInfo(
 data class AnalyzeMediaRequest(
     val mediaInfoList: List<MediaInfo>
 )
+
+// Storage Usage
+data class StorageUsage(
+    val imageBytes: Long,
+    val videoBytes: Long,
+    val totalBytes: Long,
+    val maxBytes: Long,
+    val usagePercent: Double
+) {
+    companion object {
+        const val MAX_STORAGE_BYTES: Long = 500 * 1024 * 1024 // 500MB
+    }
+}

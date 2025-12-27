@@ -2,6 +2,7 @@ package com.tripmuse.service
 
 import com.tripmuse.domain.MediaType
 import com.tripmuse.domain.User
+import com.tripmuse.dto.response.StorageUsageResponse
 import com.tripmuse.dto.response.UserResponse
 import com.tripmuse.dto.response.UserStats
 import com.tripmuse.exception.NotFoundException
@@ -109,5 +110,21 @@ class UserService(
         val savedUser = userRepository.save(user)
         val stats = getUserStats(userId)
         return UserResponse.from(savedUser, stats)
+    }
+
+    fun getStorageUsage(userId: Long): StorageUsageResponse {
+        val imageBytes = mediaRepository.sumFileSizeByUserIdAndType(userId, MediaType.IMAGE)
+        val videoBytes = mediaRepository.sumFileSizeByUserIdAndType(userId, MediaType.VIDEO)
+        return StorageUsageResponse.from(imageBytes, videoBytes)
+    }
+
+    fun canUpload(userId: Long, fileSize: Long): Boolean {
+        val currentUsage = mediaRepository.sumFileSizeByUserId(userId)
+        return (currentUsage + fileSize) <= StorageUsageResponse.MAX_STORAGE_BYTES
+    }
+
+    fun getRemainingStorage(userId: Long): Long {
+        val currentUsage = mediaRepository.sumFileSizeByUserId(userId)
+        return (StorageUsageResponse.MAX_STORAGE_BYTES - currentUsage).coerceAtLeast(0)
     }
 }

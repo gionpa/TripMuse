@@ -30,3 +30,27 @@ data class UserStats(
     val imageCount: Long,
     val videoCount: Long
 )
+
+data class StorageUsageResponse(
+    val imageBytes: Long,
+    val videoBytes: Long,
+    val totalBytes: Long,
+    val maxBytes: Long,
+    val usagePercent: Double
+) {
+    companion object {
+        const val MAX_STORAGE_BYTES: Long = 500 * 1024 * 1024 // 500MB
+
+        fun from(imageBytes: Long, videoBytes: Long): StorageUsageResponse {
+            val totalBytes = imageBytes + videoBytes
+            val usagePercent = (totalBytes.toDouble() / MAX_STORAGE_BYTES * 100).coerceIn(0.0, 100.0)
+            return StorageUsageResponse(
+                imageBytes = imageBytes,
+                videoBytes = videoBytes,
+                totalBytes = totalBytes,
+                maxBytes = MAX_STORAGE_BYTES,
+                usagePercent = usagePercent
+            )
+        }
+    }
+}

@@ -53,6 +53,7 @@ import com.tripmuse.ui.media.MediaDetailScreen
 import com.tripmuse.ui.friend.FriendScreen
 import com.tripmuse.ui.profile.ProfileScreen
 import com.tripmuse.ui.recommendation.RecommendationScreen
+import com.tripmuse.ui.settings.SettingsScreen
 import com.tripmuse.ui.splash.SplashScreen
 
 sealed class Screen(val route: String) {
@@ -76,6 +77,7 @@ sealed class Screen(val route: String) {
     object GalleryPicker : Screen("gallery/picker/{albumId}") {
         fun createRoute(albumId: Long) = "gallery/picker/$albumId"
     }
+    object Settings : Screen("settings")
 }
 
 data class BottomNavItem(
@@ -113,6 +115,8 @@ fun TripMuseNavHost(
                         popUpTo(0) { inclusive = true }
                         launchSingleTop = true
                     }
+                    // 로그인 화면 전환 후 인증 에러 상태 초기화
+                    authEventManager.clearAuthError()
                 }
             }
         }
@@ -294,7 +298,16 @@ fun TripMuseNavHost(
                             popUpTo(Screen.Splash.route) { inclusive = true }
                             launchSingleTop = true
                         }
+                    },
+                    onNavigateToSettings = {
+                        navController.navigate(Screen.Settings.route)
                     }
+                )
+            }
+
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 
