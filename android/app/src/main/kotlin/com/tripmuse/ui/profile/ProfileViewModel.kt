@@ -26,7 +26,8 @@ data class ProfileUiState(
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val api: TripMuseApi,
-    private val authRepository: com.tripmuse.data.repository.AuthRepository
+    private val authRepository: com.tripmuse.data.repository.AuthRepository,
+    private val presenceMonitor: com.tripmuse.data.presence.PresenceMonitor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -129,6 +130,8 @@ class ProfileViewModel @Inject constructor(
     fun logout(onLoggedOut: () -> Unit) {
         viewModelScope.launch {
             authRepository.logout()
+            // 이전 계정의 친구 접속 상태가 다음 계정 알림에 섞이지 않게 초기화
+            presenceMonitor.reset()
             onLoggedOut()
         }
     }

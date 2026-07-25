@@ -225,6 +225,13 @@ interface TripMuseApi {
         @Body request: UpdateLocationRequest
     ): Response<Unit>
 
+    // Presence
+    @POST("users/me/heartbeat")
+    suspend fun sendHeartbeat(): Response<Unit>
+
+    @GET("friends/presence")
+    suspend fun getFriendPresences(): Response<FriendPresenceListResponse>
+
     @GET("friends/{friendId}/location")
     suspend fun getFriendLocation(
         @Path("friendId") friendId: Long

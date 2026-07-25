@@ -7,6 +7,7 @@ import com.tripmuse.data.model.Invitation
 import com.tripmuse.data.model.UserSearchResult
 import com.tripmuse.data.repository.ChatRepository
 import com.tripmuse.data.repository.FriendRepository
+import com.tripmuse.data.presence.PresenceMonitor
 import com.tripmuse.data.repository.LocationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -25,14 +26,17 @@ data class FriendUiState(
     val searchQuery: String = "",
     val isSearching: Boolean = false,
     val error: String? = null,
-    val successMessage: String? = null
+    val successMessage: String? = null,
+    /** 폴링으로 갱신되는 실시간 접속 중인 친구 ID (친구 목록을 다시 받지 않아도 점이 바뀐다) */
+    val onlineFriendIds: Set<Long> = emptySet()
 )
 
 @HiltViewModel
 class FriendViewModel @Inject constructor(
     private val friendRepository: FriendRepository,
     private val chatRepository: ChatRepository,
-    private val locationRepository: LocationRepository
+    private val locationRepository: LocationRepository,
+    private val presenceMonitor: PresenceMonitor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FriendUiState())
@@ -43,6 +47,13 @@ class FriendViewModel @Inject constructor(
     init {
         loadFriends()
         loadInvitations()
+
+        // 접속 상태 폴링 결과를 그대로 화면에 반영
+        viewModelScope.launch {
+            presenceMonitor.onlineFriendIds.collect { ids ->
+                _uiState.value = _uiState.value.copy(onlineFriendIds = ids)
+            }
+        }
     }
 
     fun loadFriends() {

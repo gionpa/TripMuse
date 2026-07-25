@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tripmuse.data.api.TripMuseApi
 import com.tripmuse.data.model.StorageUsage
+import com.tripmuse.data.presence.NotificationPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,16 +15,32 @@ import javax.inject.Inject
 data class SettingsUiState(
     val isLoading: Boolean = false,
     val storageUsage: StorageUsage? = null,
-    val error: String? = null
+    val error: String? = null,
+    val friendOnlineAlertEnabled: Boolean = true
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val api: TripMuseApi
+    private val api: TripMuseApi,
+    private val notificationPreferences: NotificationPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            notificationPreferences.friendOnlineAlertEnabled.collect { enabled ->
+                _uiState.value = _uiState.value.copy(friendOnlineAlertEnabled = enabled)
+            }
+        }
+    }
+
+    fun setFriendOnlineAlertEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            notificationPreferences.setFriendOnlineAlertEnabled(enabled)
+        }
+    }
 
     fun loadStorageUsage() {
         viewModelScope.launch {

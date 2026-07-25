@@ -55,6 +55,53 @@ fun SettingsScreen(
                 maxBytes = uiState.storageUsage?.maxBytes ?: (1024 * 1024 * 1024),
                 isLoading = uiState.isLoading
             )
+
+            NotificationSection(
+                friendOnlineAlertEnabled = uiState.friendOnlineAlertEnabled,
+                onFriendOnlineAlertChange = { viewModel.setFriendOnlineAlertEnabled(it) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun NotificationSection(
+    friendOnlineAlertEnabled: Boolean,
+    onFriendOnlineAlertChange: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "알림",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "친구 접속 알림",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "친구가 TripMuse에 접속하면 알려줍니다",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = friendOnlineAlertEnabled,
+                    onCheckedChange = onFriendOnlineAlertChange
+                )
+            }
         }
     }
 }

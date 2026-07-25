@@ -7,7 +7,19 @@ data class Friend(
     val profileImageUrl: String?,
     val addedAt: String,
     // Gson은 필드 누락 시 null을 넣으므로 nullable로 두고 사용처에서 NONE 처리
-    val locationShareStatus: String? = null
+    val locationShareStatus: String? = null,
+    val isOnline: Boolean = false,
+    val lastSeenAt: String? = null
+)
+
+data class FriendPresence(
+    val friendId: Long,
+    val isOnline: Boolean,
+    val lastSeenAt: String?
+)
+
+data class FriendPresenceListResponse(
+    val presences: List<FriendPresence>
 )
 
 data class FriendListResponse(

@@ -38,6 +38,7 @@ import com.tripmuse.data.model.Friend
 import com.tripmuse.data.model.Invitation
 import com.tripmuse.data.model.LocationShareStatus
 import com.tripmuse.data.model.UserSearchResult
+import com.tripmuse.ui.chat.parseServerTime
 import com.tripmuse.ui.location.FriendLocationDialog
 import com.tripmuse.ui.theme.TripMuseAccents
 
@@ -252,7 +253,11 @@ fun FriendScreen(
                                     onRemoveFriend = { viewModel.removeFriend(friend.id) },
                                     onRequestLocationShare = { viewModel.requestLocationShare(friend.id) },
                                     onApproveLocationShare = { viewModel.approveLocationShare(friend.id) },
-                                    onChatClick = { viewModel.openChat(friend.id) { roomId -> onNavigateToChatRoom(roomId) } }
+                                    onChatClick = { viewModel.openChat(friend.id) { roomId -> onNavigateToChatRoom(roomId) } },
+                                    // 폴링 결과가 있으면 그 값을 우선 사용해 목록 재조회 없이 갱신
+                                    isOnlineOverride = uiState.onlineFriendIds
+                                        .takeIf { it.isNotEmpty() || friend.isOnline }
+                                        ?.contains(friend.id)
                                 )
                             }
                         }
@@ -448,15 +453,33 @@ fun InvitationSection(
     }
 }
 
+/** 온라인 상태 색 (탭 팔레트와 별개로 상태 표시에만 쓰는 신호색) */
+private val ONLINE_GREEN = Color(0xFF22C55E)
+
+/** 온라인이면 "온라인", 아니면 마지막 접속 시점을 사람이 읽는 형태로 돌려준다 */
+private fun presenceLabel(isOnline: Boolean, lastSeenAt: String?): String? {
+    if (isOnline) return "온라인"
+    val seen = parseServerTime(lastSeenAt) ?: return null
+    val minutes = java.time.Duration.between(seen, java.time.LocalDateTime.now()).toMinutes()
+    return when {
+        minutes < 1 -> "방금 전 접속"
+        minutes < 60 -> "${minutes}분 전 접속"
+        minutes < 60 * 24 -> "${minutes / 60}시간 전 접속"
+        else -> "${minutes / (60 * 24)}일 전 접속"
+    }
+}
+
 @Composable
 fun FriendItem(
     friend: Friend,
     onRemoveFriend: () -> Unit,
     onRequestLocationShare: () -> Unit = {},
     onApproveLocationShare: () -> Unit = {},
-    onChatClick: () -> Unit = {}
+    onChatClick: () -> Unit = {},
+    isOnlineOverride: Boolean? = null
 ) {
     val context = LocalContext.current
+    val isOnline = isOnlineOverride ?: friend.isOnline
     var showRemoveDialog by remember { mutableStateOf(false) }
     var showLocationDialog by remember { mutableStateOf(false) }
 
@@ -510,32 +533,51 @@ fun FriendItem(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Avatar
-                if (friend.profileImageUrl != null) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(ApiModule.BASE_URL.trimEnd('/') + friend.profileImageUrl)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "프로필 이미지",
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Surface(
-                        modifier = Modifier.size(52.dp),
-                        shape = CircleShape,
-                        color = TripMuseAccents.Friend.container
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = friend.nickname.take(1),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TripMuseAccents.Friend.deep
-                            )
+                // Avatar + 온라인 표시 점
+                Box {
+                    if (friend.profileImageUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(ApiModule.BASE_URL.trimEnd('/') + friend.profileImageUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "프로필 이미지",
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.size(52.dp),
+                            shape = CircleShape,
+                            color = TripMuseAccents.Friend.container
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = friend.nickname.take(1),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TripMuseAccents.Friend.deep
+                                )
+                            }
+                        }
+                    }
+                    if (isOnline) {
+                        Surface(
+                            modifier = Modifier
+                                .size(15.dp)
+                                .align(Alignment.BottomEnd),
+                            shape = CircleShape,
+                            color = Color.White
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Surface(
+                                    modifier = Modifier.size(11.dp),
+                                    shape = CircleShape,
+                                    color = ONLINE_GREEN
+                                ) {}
+                            }
                         }
                     }
                 }
@@ -550,9 +592,10 @@ fun FriendItem(
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = friend.email,
+                        text = presenceLabel(isOnline, friend.lastSeenAt) ?: friend.email,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isOnline) ONLINE_GREEN else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = if (isOnline) FontWeight.Medium else FontWeight.Normal
                     )
                 }
 
