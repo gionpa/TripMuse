@@ -3,8 +3,9 @@ package com.tripmuse.data.repository
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Looper
+import android.location.LocationManager
 import androidx.core.content.ContextCompat
+import android.location.Location as AndroidLocation
 import com.google.android.gms.location.CurrentLocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -40,16 +41,8 @@ class LocationRepository @Inject constructor(
             return Result.failure(Exception("위치 권한이 없습니다"))
         }
 
-        val client = LocationServices.getFusedLocationProviderClient(context)
-        val location = suspendCancellableCoroutine<android.location.Location?> { continuation ->
-            val request = CurrentLocationRequest.Builder()
-                .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
-                .setMaxUpdateAgeMillis(60_000)
-                .build()
-            client.getCurrentLocation(request, null)
-                .addOnSuccessListener { result -> continuation.resume(result) }
-                .addOnFailureListener { continuation.resume(null) }
-        } ?: return Result.failure(Exception("현재 위치를 확인할 수 없습니다"))
+        val location = currentLocation()
+            ?: return Result.failure(Exception("현재 위치를 확인할 수 없습니다"))
 
         return try {
             val response = api.updateMyLocation(
@@ -66,6 +59,44 @@ class LocationRepository @Inject constructor(
         } catch (e: Exception) {
             Result.failure(Exception("네트워크 오류: ${e.message}"))
         }
+    }
+
+    /**
+     * 위치 획득: 새 fix 요청 → 캐시된 fix → 시스템이 마지막으로 알던 위치 순으로 시도한다.
+     * 실내/기기 상태에 따라 앞 단계가 비는 경우가 흔해 폴백이 필요하다.
+     */
+    @SuppressLint("MissingPermission")
+    private suspend fun currentLocation(): AndroidLocation? {
+        val fused = LocationServices.getFusedLocationProviderClient(context)
+
+        suspendCancellableCoroutine<AndroidLocation?> { continuation ->
+            val request = CurrentLocationRequest.Builder()
+                .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                .setDurationMillis(8_000)
+                .setMaxUpdateAgeMillis(5 * 60_000)
+                .build()
+            fused.getCurrentLocation(request, null)
+                .addOnSuccessListener { result -> continuation.resume(result) }
+                .addOnFailureListener { continuation.resume(null) }
+        }?.let { return it }
+
+        suspendCancellableCoroutine<AndroidLocation?> { continuation ->
+            fused.lastLocation
+                .addOnSuccessListener { result -> continuation.resume(result) }
+                .addOnFailureListener { continuation.resume(null) }
+        }?.let { return it }
+
+        val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            ?: return null
+        return listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
+        ).asSequence()
+            .mapNotNull { provider ->
+                runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
+            }
+            .maxByOrNull { it.time }
     }
 
     suspend fun getFriendLocation(friendId: Long): Result<FriendLocation> {
