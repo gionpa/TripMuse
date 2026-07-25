@@ -11,12 +11,15 @@ data class FriendResponse(
     val nickname: String,
     val profileImageUrl: String?,
     val addedAt: LocalDateTime,
-    val locationShareStatus: LocationShareUiStatus = LocationShareUiStatus.NONE
+    val locationShareStatus: LocationShareUiStatus = LocationShareUiStatus.NONE,
+    val isOnline: Boolean = false,
+    val lastSeenAt: LocalDateTime? = null
 ) {
     companion object {
         fun from(
             friendship: Friendship,
-            locationShareStatus: LocationShareUiStatus = LocationShareUiStatus.NONE
+            locationShareStatus: LocationShareUiStatus = LocationShareUiStatus.NONE,
+            lastSeenAt: LocalDateTime? = null
         ): FriendResponse {
             return FriendResponse(
                 id = friendship.friend.id,
@@ -24,11 +27,23 @@ data class FriendResponse(
                 nickname = friendship.friend.nickname,
                 profileImageUrl = friendship.friend.profileImageUrl,
                 addedAt = friendship.createdAt,
-                locationShareStatus = locationShareStatus
+                locationShareStatus = locationShareStatus,
+                isOnline = com.tripmuse.domain.UserPresence.isOnline(lastSeenAt),
+                lastSeenAt = lastSeenAt
             )
         }
     }
 }
+
+data class FriendPresenceResponse(
+    val friendId: Long,
+    val isOnline: Boolean,
+    val lastSeenAt: LocalDateTime?
+)
+
+data class FriendPresenceListResponse(
+    val presences: List<FriendPresenceResponse>
+)
 
 data class LocationShareStatusResponse(
     val friendId: Long,

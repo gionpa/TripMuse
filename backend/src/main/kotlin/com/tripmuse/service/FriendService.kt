@@ -20,17 +20,20 @@ import org.springframework.web.server.ResponseStatusException
 class FriendService(
     private val friendshipRepository: FriendshipRepository,
     private val userRepository: UserRepository,
-    private val locationShareService: LocationShareService
+    private val locationShareService: LocationShareService,
+    private val presenceService: PresenceService
 ) {
 
     @Transactional(readOnly = true)
     fun getFriends(userId: Long): FriendListResponse {
         val friendships = friendshipRepository.findByUserIdAndStatus(userId, FriendshipStatus.ACCEPTED)
         val locationStatusMap = locationShareService.getStatusMapFor(userId)
+        val lastSeenMap = presenceService.lastSeenMapOf(friendships.map { it.friend.id })
         val friends = friendships.map { friendship ->
             FriendResponse.from(
                 friendship,
-                locationStatusMap[friendship.friend.id] ?: com.tripmuse.domain.LocationShareUiStatus.NONE
+                locationStatusMap[friendship.friend.id] ?: com.tripmuse.domain.LocationShareUiStatus.NONE,
+                lastSeenMap[friendship.friend.id]
             )
         }
         return FriendListResponse(friends, friends.size)
