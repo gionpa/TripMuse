@@ -11,10 +11,18 @@ import java.util.concurrent.ConcurrentHashMap
 @Service
 class GeocodingService {
     private val logger = LoggerFactory.getLogger(GeocodingService::class.java)
-    private val restTemplate = RestTemplate()
+
+    // Nominatim usage policy requires an identifying User-Agent; default Java UA is blocked (403)
+    private val restTemplate = RestTemplate().apply {
+        interceptors.add({ request, body, execution ->
+            request.headers.set("User-Agent", "TripMuse/1.0 (contact@tripmuse.com)")
+            execution.execute(request, body)
+        })
+    }
 
     // In-memory cache for geocoding results (to reduce API calls)
-    private val cache = ConcurrentHashMap<String, String?>()
+    // ConcurrentHashMap disallows null values, so "no result" is cached as ""
+    private val cache = ConcurrentHashMap<String, String>()
 
     /**
      * Reverse geocode latitude/longitude to a location name (city, country)
@@ -28,9 +36,7 @@ class GeocodingService {
         val cacheKey = "%.2f,%.2f".format(latitude, longitude)
 
         // Check in-memory cache first
-        if (cache.containsKey(cacheKey)) {
-            return cache[cacheKey]
-        }
+        cache[cacheKey]?.let { return it.ifEmpty { null } }
 
         return try {
             val url = "https://nominatim.openstreetmap.org/reverse?format=json&lat=$latitude&lon=$longitude&zoom=10&accept-language=ko"
@@ -39,14 +45,14 @@ class GeocodingService {
 
             val locationName = response?.let { buildLocationName(it) }
 
-            // Cache the result
-            cache[cacheKey] = locationName
+            // Cache the result ("" = no result, since ConcurrentHashMap disallows null)
+            cache[cacheKey] = locationName ?: ""
 
             logger.debug("Geocoded ($latitude, $longitude) -> $locationName")
             locationName
         } catch (e: Exception) {
             logger.warn("Failed to reverse geocode ($latitude, $longitude): ${e.message}")
-            cache[cacheKey] = null
+            cache[cacheKey] = ""
             null
         }
     }
