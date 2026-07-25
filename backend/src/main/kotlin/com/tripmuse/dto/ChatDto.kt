@@ -76,6 +76,10 @@ data class ChatMessageListResponse(
     val otherTyping: Boolean = false
 )
 
+data class ChatUnreadCountResponse(
+    val totalUnread: Long
+)
+
 data class CreateChatRoomRequest(
     val friendId: Long
 )

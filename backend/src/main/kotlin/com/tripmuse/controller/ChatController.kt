@@ -4,6 +4,7 @@ import com.tripmuse.dto.ChatMessageListResponse
 import com.tripmuse.dto.ChatMessageResponse
 import com.tripmuse.dto.ChatRoomListResponse
 import com.tripmuse.dto.ChatRoomResponse
+import com.tripmuse.dto.ChatUnreadCountResponse
 import com.tripmuse.dto.CreateChatRoomRequest
 import com.tripmuse.dto.SendMessageRequest
 import com.tripmuse.security.CustomUserDetails
@@ -33,6 +34,13 @@ class ChatController(
         @AuthenticationPrincipal user: CustomUserDetails
     ): ResponseEntity<ChatRoomListResponse> {
         return ResponseEntity.ok(chatService.getRooms(user.id))
+    }
+
+    @GetMapping("/unread-count")
+    fun getUnreadCount(
+        @AuthenticationPrincipal user: CustomUserDetails
+    ): ResponseEntity<ChatUnreadCountResponse> {
+        return ResponseEntity.ok(ChatUnreadCountResponse(chatService.getTotalUnreadCount(user.id)))
     }
 
     @GetMapping("/{roomId}")

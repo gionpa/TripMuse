@@ -59,6 +59,14 @@ class ChatService(
         return ChatRoomListResponse(rooms.map { ChatRoomResponse.from(it, userId, unreadCountOf(it, userId)) })
     }
 
+    /**
+     * 모든 방의 안읽은 메시지 합계 (하단 탭 뱃지용)
+     */
+    @Transactional(readOnly = true)
+    fun getTotalUnreadCount(userId: Long): Long {
+        return chatRoomRepository.findAllByMember(userId).sumOf { unreadCountOf(it, userId) }
+    }
+
     @Transactional(readOnly = true)
     fun getRoom(roomId: Long, userId: Long): ChatRoomResponse {
         val room = findRoomForMember(roomId, userId)
