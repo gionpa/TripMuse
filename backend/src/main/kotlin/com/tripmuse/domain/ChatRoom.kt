@@ -34,7 +34,11 @@ class ChatRoom(
     var user1LastReadMessageId: Long = 0,
 
     @Column(nullable = false)
-    var user2LastReadMessageId: Long = 0
+    var user2LastReadMessageId: Long = 0,
+
+    var user1TypingAt: LocalDateTime? = null,
+
+    var user2TypingAt: LocalDateTime? = null
 ) : BaseEntity() {
 
     fun isMember(userId: Long): Boolean = user1.id == userId || user2.id == userId
@@ -50,5 +54,20 @@ class ChatRoom(
         } else {
             if (messageId > user2LastReadMessageId) user2LastReadMessageId = messageId
         }
+    }
+
+    fun markTyping(userId: Long) {
+        val now = LocalDateTime.now()
+        if (user1.id == userId) user1TypingAt = now else user2TypingAt = now
+    }
+
+    fun isTyping(userId: Long): Boolean {
+        val typingAt = if (user1.id == userId) user1TypingAt else user2TypingAt
+        return typingAt != null && typingAt.isAfter(LocalDateTime.now().minus(TYPING_TTL))
+    }
+
+    companion object {
+        /** 클라이언트가 입력 중 신호를 2~3초마다 보내므로 그보다 여유 있게 잡는다 */
+        val TYPING_TTL: java.time.Duration = java.time.Duration.ofSeconds(6)
     }
 }

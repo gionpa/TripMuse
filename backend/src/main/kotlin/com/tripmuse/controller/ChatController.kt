@@ -63,6 +63,15 @@ class ChatController(
         return ResponseEntity.status(HttpStatus.CREATED).body(message)
     }
 
+    @PostMapping("/{roomId}/typing")
+    fun markTyping(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable roomId: Long
+    ): ResponseEntity<Void> {
+        chatService.markTyping(roomId, user.id)
+        return ResponseEntity.noContent().build()
+    }
+
     @PostMapping("/{roomId}/read")
     fun markAsRead(
         @AuthenticationPrincipal user: CustomUserDetails,

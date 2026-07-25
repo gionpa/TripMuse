@@ -74,11 +74,26 @@ class ChatService(
      */
     @Transactional(readOnly = true)
     fun getMessages(roomId: Long, userId: Long, beforeId: Long?, afterId: Long?): ChatMessageListResponse {
-        findRoomForMember(roomId, userId)
+        val room = findRoomForMember(roomId, userId)
+        val otherId = room.otherUser(userId).id
+        val otherLastRead = room.lastReadMessageIdOf(otherId)
+        val otherTyping = room.isTyping(otherId)
+
+        fun toResponse(message: ChatMessage) = ChatMessageResponse.from(
+            message = message,
+            requestUserId = userId,
+            // 보낸 사람 자신은 제외하고, 아직 안 읽은 참여자 수를 센다
+            unreadCount = if (message.sender.id == userId && message.id > otherLastRead) 1 else 0
+        )
 
         if (afterId != null) {
             val newMessages = chatMessageRepository.findByRoomIdAndIdGreaterThanOrderByIdAsc(roomId, afterId)
-            return ChatMessageListResponse(newMessages.map { ChatMessageResponse.from(it, userId) }, hasMore = false)
+            return ChatMessageListResponse(
+                messages = newMessages.map(::toResponse),
+                hasMore = false,
+                otherLastReadMessageId = otherLastRead,
+                otherTyping = otherTyping
+            )
         }
 
         val pageDesc = if (beforeId != null) {
@@ -87,9 +102,20 @@ class ChatService(
             chatMessageRepository.findTop50ByRoomIdOrderByIdDesc(roomId)
         }
         return ChatMessageListResponse(
-            messages = pageDesc.asReversed().map { ChatMessageResponse.from(it, userId) },
-            hasMore = pageDesc.size == MESSAGE_PAGE_SIZE
+            messages = pageDesc.asReversed().map(::toResponse),
+            hasMore = pageDesc.size == MESSAGE_PAGE_SIZE,
+            otherLastReadMessageId = otherLastRead,
+            otherTyping = otherTyping
         )
+    }
+
+    /**
+     * 입력 중 신호. 클라이언트가 타이핑하는 동안 주기적으로 호출한다.
+     */
+    @Transactional
+    fun markTyping(roomId: Long, userId: Long) {
+        val room = findRoomForMember(roomId, userId)
+        room.markTyping(userId)
     }
 
     @Transactional

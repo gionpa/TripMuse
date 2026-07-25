@@ -48,10 +48,12 @@ data class ChatMessageResponse(
     val senderNickname: String,
     val content: String,
     val createdAt: LocalDateTime,
-    val isMine: Boolean
+    val isMine: Boolean,
+    /** 아직 읽지 않은 참여자 수 (1:1이면 0 또는 1). 카카오톡의 말풍선 옆 숫자와 같은 의미 */
+    val unreadCount: Int = 0
 ) {
     companion object {
-        fun from(message: ChatMessage, requestUserId: Long): ChatMessageResponse {
+        fun from(message: ChatMessage, requestUserId: Long, unreadCount: Int = 0): ChatMessageResponse {
             return ChatMessageResponse(
                 id = message.id,
                 roomId = message.room.id,
@@ -59,7 +61,8 @@ data class ChatMessageResponse(
                 senderNickname = message.sender.nickname,
                 content = message.content,
                 createdAt = message.createdAt,
-                isMine = message.sender.id == requestUserId
+                isMine = message.sender.id == requestUserId,
+                unreadCount = unreadCount
             )
         }
     }
@@ -67,7 +70,10 @@ data class ChatMessageResponse(
 
 data class ChatMessageListResponse(
     val messages: List<ChatMessageResponse>,
-    val hasMore: Boolean
+    val hasMore: Boolean,
+    /** 상대가 어디까지 읽었는지 — 클라이언트가 이 값으로 안읽음 배지를 즉시 갱신한다 */
+    val otherLastReadMessageId: Long = 0,
+    val otherTyping: Boolean = false
 )
 
 data class CreateChatRoomRequest(
