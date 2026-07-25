@@ -25,7 +25,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.tripmuse.data.api.ApiModule
@@ -33,6 +36,7 @@ import com.tripmuse.data.model.Friend
 import com.tripmuse.data.model.Invitation
 import com.tripmuse.data.model.LocationShareStatus
 import com.tripmuse.data.model.UserSearchResult
+import com.tripmuse.ui.theme.TripMuseAccents
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,9 +74,9 @@ fun FriendScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("친구") },
+                title = { Text("친구", fontWeight = FontWeight.SemiBold) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    containerColor = TripMuseAccents.Friend.container
                 )
             )
         },
@@ -81,6 +85,11 @@ fun FriendScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(TripMuseAccents.Friend.container.copy(alpha = 0.55f), Color.White)
+                    )
+                )
                 .padding(paddingValues)
         ) {
             // Search bar
@@ -499,28 +508,19 @@ fun FriendItem(
         )
     }
 
-    val cardShape = RoundedCornerShape(16.dp)
+    val cardShape = RoundedCornerShape(20.dp)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .shadow(elevation = 6.dp, shape = cardShape),
+            .padding(horizontal = 14.dp, vertical = 7.dp)
+            .shadow(elevation = 3.dp, shape = cardShape, ambientColor = TripMuseAccents.Friend.accent.copy(alpha = 0.25f)),
         shape = cardShape,
-        color = MaterialTheme.colorScheme.surface
+        color = Color.White
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.surface,
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-                        )
-                    ),
-                    shape = cardShape
-                )
-                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .padding(start = 16.dp, end = 10.dp, top = 14.dp, bottom = 14.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -535,21 +535,22 @@ fun FriendItem(
                             .build(),
                         contentDescription = "프로필 이미지",
                         modifier = Modifier
-                            .size(54.dp)
+                            .size(52.dp)
                             .clip(CircleShape),
                         contentScale = ContentScale.Crop
                     )
                 } else {
                     Surface(
-                        modifier = Modifier.size(54.dp),
+                        modifier = Modifier.size(52.dp),
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer
+                        color = TripMuseAccents.Friend.container
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = friend.nickname.take(1),
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                fontWeight = FontWeight.Bold,
+                                color = TripMuseAccents.Friend.deep
                             )
                         }
                     }
@@ -561,7 +562,8 @@ fun FriendItem(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = friend.nickname,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         text = friend.email,
@@ -570,84 +572,109 @@ fun FriendItem(
                     )
                 }
 
-                // Remove button (chip-style)
-                AssistChip(
-                    onClick = { showRemoveDialog = true },
-                    label = { Text("삭제") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.PersonRemove,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        labelColor = MaterialTheme.colorScheme.onErrorContainer
+                // 삭제: 파괴적 액션은 조용한 아이콘으로 (확인 다이얼로그에서 명확히)
+                IconButton(onClick = { showRemoveDialog = true }) {
+                    Icon(
+                        Icons.Default.PersonRemove,
+                        contentDescription = "친구 삭제",
+                        modifier = Modifier.size(20.dp),
+                        tint = Color(0xFFB6BEC9)
                     )
-                )
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 위치 공유 상태별 버튼 + 채팅 버튼
+            // 액션 버튼: 동일한 형태(pill), 색으로만 의미 구분
+            // 위치 계열 = 친구 탭 청록, 채팅 = 채팅 탭 앰버 (하단 탭 팔레트와 연결)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 when (friend.locationShareStatus ?: LocationShareStatus.NONE) {
-                    LocationShareStatus.REQUESTED_BY_ME -> {
-                        OutlinedButton(
-                            onClick = { },
-                            enabled = false,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("위치 공유 요청됨")
-                        }
-                    }
-                    LocationShareStatus.PENDING_MY_APPROVAL -> {
-                        Button(
-                            onClick = onApproveLocationShare,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("위치 공유 승인")
-                        }
-                    }
-                    LocationShareStatus.APPROVED -> {
-                        Button(
-                            onClick = { showLocationDialog = true },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("현재 위치보기")
-                        }
-                    }
-                    else -> {
-                        OutlinedButton(
-                            onClick = onRequestLocationShare,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("위치 공유 요청")
-                        }
-                    }
+                    LocationShareStatus.REQUESTED_BY_ME -> FriendActionButton(
+                        text = "승인 대기중",
+                        icon = Icons.Default.Schedule,
+                        container = Color(0xFFF1F3F6),
+                        content = Color(0xFF9AA3AF),
+                        enabled = false,
+                        modifier = Modifier.weight(1f),
+                        onClick = { }
+                    )
+                    LocationShareStatus.PENDING_MY_APPROVAL -> FriendActionButton(
+                        text = "위치 공유 승인",
+                        icon = Icons.Default.Check,
+                        container = TripMuseAccents.Friend.accent,
+                        content = Color.White,
+                        modifier = Modifier.weight(1f),
+                        onClick = onApproveLocationShare
+                    )
+                    LocationShareStatus.APPROVED -> FriendActionButton(
+                        text = "현재 위치보기",
+                        icon = Icons.Default.Map,
+                        container = TripMuseAccents.Friend.accent,
+                        content = Color.White,
+                        modifier = Modifier.weight(1f),
+                        onClick = { showLocationDialog = true }
+                    )
+                    else -> FriendActionButton(
+                        text = "위치 공유 요청",
+                        icon = Icons.Default.LocationOn,
+                        container = TripMuseAccents.Friend.container,
+                        content = TripMuseAccents.Friend.deep,
+                        modifier = Modifier.weight(1f),
+                        onClick = onRequestLocationShare
+                    )
                 }
 
-                FilledTonalButton(
-                    onClick = onChatClick,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.ChatBubble, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("채팅")
-                }
+                FriendActionButton(
+                    text = "채팅",
+                    icon = Icons.Default.ChatBubble,
+                    container = TripMuseAccents.Chat.container,
+                    content = TripMuseAccents.Chat.deep,
+                    modifier = Modifier.weight(1f),
+                    onClick = onChatClick
+                )
             }
+        }
+    }
+}
+
+/**
+ * 친구 카드 공용 액션 버튼 — 형태/높이/타이포는 고정, 색만 의미에 따라 달라진다.
+ */
+@Composable
+private fun FriendActionButton(
+    text: String,
+    icon: ImageVector,
+    container: Color,
+    content: Color,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.height(42.dp),
+        shape = RoundedCornerShape(21.dp),
+        color = container,
+        contentColor = content
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(17.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

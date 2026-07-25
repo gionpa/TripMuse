@@ -1,5 +1,6 @@
 package com.tripmuse.ui.chat
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -30,6 +32,7 @@ import coil.request.ImageRequest
 import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.ChatRoom
 import com.tripmuse.data.repository.ChatRepository
+import com.tripmuse.ui.theme.TripMuseAccents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,9 +89,9 @@ fun ChatListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("채팅") },
+                title = { Text("채팅", fontWeight = FontWeight.SemiBold) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    containerColor = TripMuseAccents.Chat.container
                 )
             )
         }
@@ -96,6 +99,11 @@ fun ChatListScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(TripMuseAccents.Chat.container.copy(alpha = 0.45f), Color.White)
+                    )
+                )
                 .padding(paddingValues)
         ) {
             when {
@@ -174,13 +182,14 @@ private fun ChatRoomItem(
             Surface(
                 modifier = Modifier.size(52.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer
+                color = TripMuseAccents.Chat.container
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = room.otherUser.nickname.take(1),
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        fontWeight = FontWeight.Bold,
+                        color = TripMuseAccents.Chat.deep
                     )
                 }
             }

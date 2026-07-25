@@ -1,5 +1,6 @@
 package com.tripmuse.ui.chat
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,6 +32,8 @@ import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.ChatMessage
 import com.tripmuse.data.model.ChatRoom
 import com.tripmuse.data.repository.ChatRepository
+import com.tripmuse.ui.theme.TripMuseAccents
+import androidx.compose.ui.text.font.FontWeight
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -222,14 +225,14 @@ fun ChatRoomScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(uiState.room?.otherUser?.nickname ?: "채팅") },
+                title = { Text(uiState.room?.otherUser?.nickname ?: "채팅", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    containerColor = TripMuseAccents.Chat.container
                 )
             )
         },
@@ -238,6 +241,7 @@ fun ChatRoomScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0xFFFBF5E9)) // 채팅방 배경: 노을빛 종이 톤
                 .padding(paddingValues)
                 .consumeWindowInsets(paddingValues)
                 .imePadding()
@@ -311,12 +315,12 @@ private fun DateSeparator(label: String) {
     ) {
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+            color = Color.White.copy(alpha = 0.75f)
         ) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color(0xFF8A8377),
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
         }
@@ -342,12 +346,12 @@ private fun MessageBubble(
             Text(
                 text = timeText,
                 fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color(0xFFA89F8F),
                 modifier = Modifier.padding(end = 6.dp, bottom = 2.dp)
             )
             Surface(
                 shape = RoundedCornerShape(topStart = 18.dp, topEnd = 4.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
-                color = Color(0xFF5B7FFF)
+                color = TripMuseAccents.Album.accent
             ) {
                 Text(
                     text = message.content,
@@ -382,13 +386,14 @@ private fun MessageBubble(
                 Surface(
                     modifier = Modifier.size(36.dp),
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer
+                    color = TripMuseAccents.Chat.container
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = message.senderNickname.take(1),
                             style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            fontWeight = FontWeight.Bold,
+                            color = TripMuseAccents.Chat.deep
                         )
                     }
                 }
@@ -399,12 +404,13 @@ private fun MessageBubble(
             Row(verticalAlignment = Alignment.Bottom) {
                 Surface(
                     shape = RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                    color = Color.White,
+                    shadowElevation = 1.dp
                 ) {
                     Text(
                         text = message.content,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = Color(0xFF2E2A24),
                         modifier = Modifier
                             .widthIn(max = 260.dp)
                             .padding(horizontal = 14.dp, vertical = 9.dp)
@@ -413,7 +419,7 @@ private fun MessageBubble(
                 Text(
                     text = timeText,
                     fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color(0xFFA89F8F),
                     modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
                 )
             }
@@ -427,7 +433,7 @@ private fun ChatInputBar(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit
 ) {
-    Surface(tonalElevation = 3.dp) {
+    Surface(color = Color.White, shadowElevation = 8.dp) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -441,10 +447,12 @@ private fun ChatInputBar(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(max = 120.dp),
-                placeholder = { Text("메시지 입력") },
+                placeholder = { Text("메시지 입력", color = Color(0xFFB4AC9E)) },
                 maxLines = 4,
                 shape = RoundedCornerShape(24.dp),
                 colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF6F1E7),
+                    unfocusedContainerColor = Color(0xFFF6F1E7),
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent
@@ -454,7 +462,13 @@ private fun ChatInputBar(
             FilledIconButton(
                 onClick = onSend,
                 enabled = value.isNotBlank(),
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(48.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = TripMuseAccents.Chat.accent,
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFFEDE7DB),
+                    disabledContentColor = Color(0xFFB4AC9E)
+                )
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "전송")
             }

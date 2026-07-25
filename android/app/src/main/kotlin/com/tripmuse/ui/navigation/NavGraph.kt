@@ -50,6 +50,8 @@ import com.tripmuse.data.deeplink.DeepLinkManager
 import com.tripmuse.ui.chat.ChatListScreen
 import com.tripmuse.ui.chat.ChatRoomScreen
 import com.tripmuse.ui.share.SharedAlbumEntryScreen
+import com.tripmuse.ui.theme.TabAccent
+import com.tripmuse.ui.theme.TripMuseAccents
 import com.tripmuse.ui.album.AlbumViewModel
 import com.tripmuse.ui.album.AlbumCreateScreen
 import com.tripmuse.ui.album.AlbumDetailScreen
@@ -99,15 +101,16 @@ data class BottomNavItem(
     val screen: Screen,
     val label: String,
     val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector
+    val unselectedIcon: ImageVector,
+    val accent: TabAccent
 )
 
 val bottomNavItems = listOf(
-    BottomNavItem(Screen.Home, "앨범", Icons.Filled.Home, Icons.Outlined.Home),
-    BottomNavItem(Screen.Friend, "친구", Icons.Filled.People, Icons.Outlined.People),
-    BottomNavItem(Screen.ChatList, "채팅", Icons.Filled.ChatBubble, Icons.Outlined.ChatBubbleOutline),
-    BottomNavItem(Screen.Recommendation, "추천", Icons.Filled.Lightbulb, Icons.Outlined.Lightbulb),
-    BottomNavItem(Screen.Profile, "프로필", Icons.Filled.Person, Icons.Outlined.Person)
+    BottomNavItem(Screen.Home, "앨범", Icons.Filled.Home, Icons.Outlined.Home, TripMuseAccents.Album),
+    BottomNavItem(Screen.Friend, "친구", Icons.Filled.People, Icons.Outlined.People, TripMuseAccents.Friend),
+    BottomNavItem(Screen.ChatList, "채팅", Icons.Filled.ChatBubble, Icons.Outlined.ChatBubbleOutline, TripMuseAccents.Chat),
+    BottomNavItem(Screen.Recommendation, "추천", Icons.Filled.Lightbulb, Icons.Outlined.Lightbulb, TripMuseAccents.Recommend),
+    BottomNavItem(Screen.Profile, "프로필", Icons.Filled.Person, Icons.Outlined.Person, TripMuseAccents.Profile)
 )
 
 @Composable
@@ -180,11 +183,9 @@ fun TripMuseNavHost(
         )
     }
 
-    // Custom colors for bottom navigation
-    val primaryColor = Color(0xFF5B7FFF)  // Modern blue
-    val unselectedColor = Color(0xFF9CA3AF)  // Gray
+    // 하단 네비게이션: 탭마다 자기 액센트로 물들되(TabAccents), 비선택은 뉴트럴로 통일
+    val unselectedColor = TripMuseAccents.Unselected
     val backgroundColor = Color.White
-    val indicatorColor = Color(0xFFEEF2FF)  // Light blue tint
 
     Scaffold(
         bottomBar = {
@@ -231,11 +232,11 @@ fun TripMuseNavHost(
                                 }
                             },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = primaryColor,
-                                selectedTextColor = primaryColor,
+                                selectedIconColor = item.accent.deep,
+                                selectedTextColor = item.accent.deep,
                                 unselectedIconColor = unselectedColor,
                                 unselectedTextColor = unselectedColor,
-                                indicatorColor = indicatorColor
+                                indicatorColor = item.accent.container
                             )
                         )
                     }
