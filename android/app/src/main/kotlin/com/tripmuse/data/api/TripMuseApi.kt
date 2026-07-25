@@ -269,6 +269,14 @@ interface TripMuseApi {
         @Path("roomId") roomId: Long
     ): Response<Unit>
 
+    @POST("chats/{roomId}/typing")
+    suspend fun markChatTyping(
+        @Path("roomId") roomId: Long
+    ): Response<Unit>
+
+    @GET("chats/unread-count")
+    suspend fun getChatUnreadCount(): Response<ChatUnreadCountResponse>
+
     @POST("friends/invitations/{invitationId}/accept")
     suspend fun acceptInvitation(
         @Path("invitationId") invitationId: Long

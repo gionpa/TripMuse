@@ -40,6 +40,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var presenceMonitor: PresenceMonitor
 
+    @Inject
+    lateinit var chatUnreadMonitor: com.tripmuse.data.presence.ChatUnreadMonitor
+
     private var naverLoginCallback: ((String?) -> Unit)? = null
     private var navController: NavHostController? = null
 
@@ -86,6 +89,7 @@ class MainActivity : ComponentActivity() {
                     TripMuseNavHost(
                         authEventManager = authEventManager,
                         deepLinkManager = deepLinkManager,
+                        chatUnreadMonitor = chatUnreadMonitor,
                         onExitApp = { finish() },
                         onNaverLoginClick = { callback ->
                             naverLoginCallback = callback

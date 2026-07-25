@@ -1,5 +1,10 @@
 package com.tripmuse.ui.chat
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,6 +36,7 @@ import coil.request.ImageRequest
 import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.ChatMessage
 import com.tripmuse.data.model.ChatRoom
+import com.tripmuse.data.presence.ChatUnreadMonitor
 import com.tripmuse.data.repository.ChatRepository
 import com.tripmuse.ui.theme.TripMuseAccents
 import androidx.compose.ui.text.font.FontWeight
@@ -49,16 +55,22 @@ data class ChatRoomUiState(
     val messages: List<ChatMessage> = emptyList(), // 오래된 → 최신 순
     val hasMore: Boolean = false,
     val isLoadingMore: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    /** 상대가 읽은 마지막 메시지 ID — 이보다 큰 내 메시지에 안읽음 숫자를 표시한다 */
+    val otherLastReadMessageId: Long = 0,
+    val otherTyping: Boolean = false
 )
 
 @HiltViewModel
 class ChatRoomViewModel @Inject constructor(
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val chatUnreadMonitor: ChatUnreadMonitor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatRoomUiState())
     val uiState: StateFlow<ChatRoomUiState> = _uiState.asStateFlow()
+
+    private var lastTypingSentAt = 0L
 
     fun enterRoom(roomId: Long) {
         viewModelScope.launch {
@@ -77,7 +89,9 @@ class ChatRoomViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         messages = response.messages,
-                        hasMore = response.hasMore
+                        hasMore = response.hasMore,
+                        otherLastReadMessageId = response.otherLastReadMessageId,
+                        otherTyping = response.otherTyping
                     )
                     markRead(roomId)
                 }
@@ -87,18 +101,36 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
-    /** 3초 주기 폴링: 마지막 메시지 이후의 새 메시지만 가져온다 */
+    /** 3초 주기 폴링: 새 메시지 + 상대 읽음 위치 + 입력중 상태를 한 번에 받는다 */
     suspend fun pollNewMessages(roomId: Long) {
         if (_uiState.value.isLoading) return
         val lastId = _uiState.value.messages.lastOrNull()?.id ?: 0L
         chatRepository.getMessages(roomId, afterId = lastId)
             .onSuccess { response ->
+                _uiState.value = _uiState.value.copy(
+                    otherLastReadMessageId = maxOf(
+                        response.otherLastReadMessageId,
+                        _uiState.value.otherLastReadMessageId
+                    ),
+                    otherTyping = response.otherTyping
+                )
                 if (response.messages.isNotEmpty()) {
                     appendMessages(response.messages)
                     markRead(roomId)
                 }
             }
         // 폴링 실패는 조용히 넘어가고 다음 주기에 재시도
+    }
+
+    /**
+     * 입력 중 신호. 타이핑마다 보내지 않고 2초에 한 번으로 제한한다.
+     */
+    fun onInputChanged(roomId: Long, text: String) {
+        if (text.isBlank()) return
+        val now = System.currentTimeMillis()
+        if (now - lastTypingSentAt < 2_000L) return
+        lastTypingSentAt = now
+        viewModelScope.launch { chatRepository.markTyping(roomId) }
     }
 
     fun loadOlderMessages(roomId: Long) {
@@ -145,13 +177,18 @@ class ChatRoomViewModel @Inject constructor(
     }
 
     private fun markRead(roomId: Long) {
-        viewModelScope.launch { chatRepository.markAsRead(roomId) }
+        viewModelScope.launch {
+            chatRepository.markAsRead(roomId)
+            // 탭 레드닷을 폴링 주기까지 기다리지 않고 즉시 갱신
+            chatUnreadMonitor.refreshNow()
+        }
     }
 }
 
 private sealed class ChatListEntry {
     data class MessageEntry(val message: ChatMessage) : ChatListEntry()
     data class DateEntry(val label: String) : ChatListEntry()
+    object TypingEntry : ChatListEntry()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -188,8 +225,8 @@ fun ChatRoomScreen(
         }
     }
 
-    // 새 메시지 도착/전송 시 맨 아래로 스크롤 (reverseLayout이라 index 0이 최신)
-    LaunchedEffect(uiState.messages.size) {
+    // 새 메시지 도착/전송, 입력중 표시 등장 시 맨 아래로 스크롤 (reverseLayout이라 index 0이 최신)
+    LaunchedEffect(uiState.messages.size, uiState.otherTyping) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(0)
         }
@@ -208,7 +245,7 @@ fun ChatRoomScreen(
     }
 
     // 날짜 구분선을 끼워 넣은 표시용 목록 (reverseLayout에 맞춰 최신이 앞으로 오게 뒤집는다)
-    val entries = remember(uiState.messages) {
+    val entries = remember(uiState.messages, uiState.otherTyping) {
         buildList {
             var lastDate: LocalDate? = null
             uiState.messages.forEach { message ->
@@ -219,6 +256,8 @@ fun ChatRoomScreen(
                 }
                 add(ChatListEntry.MessageEntry(message))
             }
+            // 뒤집기 전 맨 끝에 두면 화면상 가장 아래(최신 아래)에 보인다
+            if (uiState.otherTyping) add(ChatListEntry.TypingEntry)
         }.asReversed()
     }
 
@@ -262,15 +301,24 @@ fun ChatRoomScreen(
                                 when (entry) {
                                     is ChatListEntry.MessageEntry -> "m-${entry.message.id}"
                                     is ChatListEntry.DateEntry -> "d-${entry.label}"
+                                    ChatListEntry.TypingEntry -> "typing"
                                 }
                             }
                         ) { entry ->
                             when (entry) {
                                 is ChatListEntry.MessageEntry -> MessageBubble(
                                     message = entry.message,
-                                    otherUserProfileImageUrl = uiState.room?.otherUser?.profileImageUrl
+                                    otherUserProfileImageUrl = uiState.room?.otherUser?.profileImageUrl,
+                                    // 상대가 아직 읽지 않은 내 메시지에 숫자를 붙인다
+                                    unreadCount = if (entry.message.isMine &&
+                                        entry.message.id > uiState.otherLastReadMessageId
+                                    ) 1 else 0
                                 )
                                 is ChatListEntry.DateEntry -> DateSeparator(entry.label)
+                                ChatListEntry.TypingEntry -> TypingIndicator(
+                                    nickname = uiState.room?.otherUser?.nickname ?: "상대방",
+                                    profileImageUrl = uiState.room?.otherUser?.profileImageUrl
+                                )
                             }
                         }
 
@@ -292,7 +340,10 @@ fun ChatRoomScreen(
 
             ChatInputBar(
                 value = inputText,
-                onValueChange = { inputText = it },
+                onValueChange = {
+                    inputText = it
+                    viewModel.onInputChanged(roomId, it)
+                },
                 onSend = {
                     val text = inputText.trim()
                     if (text.isNotEmpty()) {
@@ -330,7 +381,8 @@ private fun DateSeparator(label: String) {
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
-    otherUserProfileImageUrl: String? = null
+    otherUserProfileImageUrl: String? = null,
+    unreadCount: Int = 0
 ) {
     val context = LocalContext.current
     val timeText = formatMessageTime(message.createdAt)
@@ -343,12 +395,26 @@ private fun MessageBubble(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.Bottom
         ) {
-            Text(
-                text = timeText,
-                fontSize = 10.sp,
-                color = Color(0xFFA89F8F),
+            Column(
+                horizontalAlignment = Alignment.End,
                 modifier = Modifier.padding(end = 6.dp, bottom = 2.dp)
-            )
+            ) {
+                // 아직 읽지 않은 사람 수 (읽으면 사라진다)
+                if (unreadCount > 0) {
+                    Text(
+                        text = unreadCount.toString(),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TripMuseAccents.Chat.accent
+                    )
+                    Spacer(modifier = Modifier.height(1.dp))
+                }
+                Text(
+                    text = timeText,
+                    fontSize = 10.sp,
+                    color = Color(0xFFA89F8F)
+                )
+            }
             Surface(
                 shape = RoundedCornerShape(topStart = 18.dp, topEnd = 4.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
                 color = TripMuseAccents.Album.accent
@@ -425,6 +491,99 @@ private fun MessageBubble(
             }
         }
     }
+}
+
+/**
+ * 상대가 입력 중일 때 말풍선 자리에 표시되는 점 세 개 인디케이터.
+ */
+@Composable
+private fun TypingIndicator(
+    nickname: String,
+    profileImageUrl: String?
+) {
+    val context = LocalContext.current
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        if (profileImageUrl != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(ApiModule.BASE_URL.trimEnd('/') + profileImageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Surface(
+                modifier = Modifier.size(36.dp),
+                shape = CircleShape,
+                color = TripMuseAccents.Chat.container
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = nickname.take(1),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TripMuseAccents.Chat.deep
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Surface(
+            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
+            color = Color.White,
+            shadowElevation = 1.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(3) { index ->
+                    val alpha = rememberTypingDotAlpha(index)
+                    Surface(
+                        modifier = Modifier.size(7.dp),
+                        shape = CircleShape,
+                        color = TripMuseAccents.Chat.deep.copy(alpha = alpha)
+                    ) {}
+                    if (index < 2) Spacer(modifier = Modifier.width(4.dp))
+                }
+            }
+        }
+
+        Text(
+            text = "입력 중",
+            fontSize = 10.sp,
+            color = Color(0xFFA89F8F),
+            modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+        )
+    }
+}
+
+/** 점 세 개가 차례로 밝아지는 애니메이션 */
+@Composable
+private fun rememberTypingDotAlpha(index: Int): Float {
+    val transition = rememberInfiniteTransition(label = "typing")
+    val alpha by transition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 600, delayMillis = index * 200),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot$index"
+    )
+    return alpha
 }
 
 @Composable

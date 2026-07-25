@@ -90,6 +90,33 @@ class ChatRepository @Inject constructor(
         }
     }
 
+    suspend fun markTyping(roomId: Long): Result<Unit> {
+        return try {
+            val response = api.markChatTyping(roomId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("입력 상태 전송 실패"))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getTotalUnreadCount(): Result<Long> {
+        return try {
+            val response = api.getChatUnreadCount()
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!.totalUnread)
+            } else {
+                Result.failure(Exception("안읽음 수를 불러올 수 없습니다"))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun markAsRead(roomId: Long): Result<Unit> {
         return try {
             val response = api.markChatAsRead(roomId)

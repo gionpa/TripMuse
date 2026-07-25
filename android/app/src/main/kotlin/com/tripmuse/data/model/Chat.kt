@@ -25,12 +25,19 @@ data class ChatMessage(
     val senderNickname: String,
     val content: String,
     val createdAt: String,
-    val isMine: Boolean
+    val isMine: Boolean,
+    val unreadCount: Int = 0
 )
 
 data class ChatMessageListResponse(
     val messages: List<ChatMessage>,
-    val hasMore: Boolean
+    val hasMore: Boolean,
+    val otherLastReadMessageId: Long = 0,
+    val otherTyping: Boolean = false
+)
+
+data class ChatUnreadCountResponse(
+    val totalUnread: Long
 )
 
 data class CreateChatRoomRequest(

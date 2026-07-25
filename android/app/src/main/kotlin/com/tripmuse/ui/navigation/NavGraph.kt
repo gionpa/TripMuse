@@ -47,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.tripmuse.data.auth.AuthEvent
 import com.tripmuse.data.auth.AuthEventManager
 import com.tripmuse.data.deeplink.DeepLinkManager
+import com.tripmuse.data.presence.ChatUnreadMonitor
 import com.tripmuse.ui.chat.ChatListScreen
 import com.tripmuse.ui.chat.ChatRoomScreen
 import com.tripmuse.ui.share.SharedAlbumEntryScreen
@@ -117,11 +118,13 @@ val bottomNavItems = listOf(
 fun TripMuseNavHost(
     authEventManager: AuthEventManager,
     deepLinkManager: DeepLinkManager,
+    chatUnreadMonitor: ChatUnreadMonitor,
     onExitApp: () -> Unit = {},
     onNaverLoginClick: ((callback: (String?) -> Unit) -> Unit)? = null,
     onNavControllerReady: (NavHostController) -> Unit = {}
 ) {
     val navController = rememberNavController()
+    val unreadChatCount by chatUnreadMonitor.totalUnread.collectAsState()
     LaunchedEffect(navController) {
         onNavControllerReady(navController)
     }
@@ -209,10 +212,20 @@ fun TripMuseNavHost(
 
                         NavigationBarItem(
                             icon = {
-                                Icon(
-                                    imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                                    contentDescription = item.label
-                                )
+                                // 읽지 않은 채팅이 있으면 채팅 탭에 레드닷
+                                val showDot = item.screen == Screen.ChatList && unreadChatCount > 0
+                                BadgedBox(
+                                    badge = {
+                                        if (showDot) {
+                                            Badge(containerColor = Color(0xFFFF3B30))
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
+                                        contentDescription = item.label
+                                    )
+                                }
                             },
                             label = {
                                 Text(
