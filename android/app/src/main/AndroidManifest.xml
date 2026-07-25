@@ -25,9 +25,10 @@
         android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="31">
 
-        <!-- 지도 API 키 (local.properties에서 주입) -->
+        <!-- 지도 API 키 (local.properties에서 주입).
+             네이버는 NCP 콘솔에서 발급한 신규 키(NCP_KEY_ID)를 사용한다. -->
         <meta-data
-            android:name="com.naver.maps.map.CLIENT_ID"
+            android:name="com.naver.maps.map.NCP_KEY_ID"
             android:value="${naverMapsClientId}" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"

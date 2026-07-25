@@ -152,7 +152,7 @@ dependencies {
     implementation("com.navercorp.nid:oauth:5.10.0")
 
     // Maps: 국내는 네이버 지도, 해외는 구글 지도
-    implementation("com.naver.maps:map-sdk:3.19.1")
+    implementation("com.naver.maps:map-sdk:3.23.3")
     implementation("com.google.android.gms:play-services-maps:18.2.0")
     implementation("com.google.maps.android:maps-compose:4.3.3")
 
