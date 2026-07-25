@@ -7,6 +7,7 @@ import com.tripmuse.data.model.Invitation
 import com.tripmuse.data.model.UserSearchResult
 import com.tripmuse.data.repository.ChatRepository
 import com.tripmuse.data.repository.FriendRepository
+import com.tripmuse.data.repository.LocationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -30,7 +31,8 @@ data class FriendUiState(
 @HiltViewModel
 class FriendViewModel @Inject constructor(
     private val friendRepository: FriendRepository,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val locationRepository: LocationRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FriendUiState())
@@ -190,6 +192,19 @@ class FriendViewModel @Inject constructor(
                 }
         }
     }
+
+    /**
+     * 내 현재 위치를 서버에 올린다 (친구가 '현재 위치보기'로 볼 수 있는 값).
+     * 권한이 없거나 위치를 못 얻으면 조용히 넘어간다.
+     */
+    fun uploadMyLocation() {
+        if (!locationRepository.hasLocationPermission()) return
+        viewModelScope.launch {
+            locationRepository.uploadMyLocation()
+        }
+    }
+
+    fun hasLocationPermission(): Boolean = locationRepository.hasLocationPermission()
 
     fun requestLocationShare(friendId: Long) {
         viewModelScope.launch {

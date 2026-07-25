@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,6 +7,16 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     kotlin("kapt")
 }
+
+// 지도 API 키는 local.properties에 보관한다 (git에 커밋되지 않음)
+//   naver.maps.clientId=<NCP Maps 클라이언트 ID>
+//   google.maps.apiKey=<Google Maps SDK for Android 키>
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val naverMapsClientId: String = localProps.getProperty("naver.maps.clientId") ?: ""
+val googleMapsApiKey: String = localProps.getProperty("google.maps.apiKey") ?: ""
 
 android {
     namespace = "com.tripmuse"
@@ -21,6 +33,11 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        manifestPlaceholders["naverMapsClientId"] = naverMapsClientId
+        manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey
+        buildConfigField("String", "NAVER_MAPS_CLIENT_ID", "\"$naverMapsClientId\"")
+        buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsApiKey\"")
     }
 
     signingConfigs {
@@ -44,6 +61,17 @@ android {
             )
             buildConfigField("String", "BASE_URL", "\"https://tripmuse-production.up.railway.app/api/v1/\"")
             signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    // 지도 SDK의 네이티브 라이브러리가 ABI마다 20MB대라 APK를 ABI별로 나눈다.
+    // (Play에 올리는 AAB는 영향받지 않고, 기기별로 알아서 분리 배포된다)
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "x86_64")
+            isUniversalApk = false
         }
     }
 
@@ -122,6 +150,14 @@ dependencies {
 
     // Naver Login SDK
     implementation("com.navercorp.nid:oauth:5.10.0")
+
+    // Maps: 국내는 네이버 지도, 해외는 구글 지도
+    implementation("com.naver.maps:map-sdk:3.19.1")
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.maps.android:maps-compose:4.3.3")
+
+    // 현재 위치 수집
+    implementation("com.google.android.gms:play-services-location:21.2.0")
 
     // Test
     testImplementation("junit:junit:4.13.2")

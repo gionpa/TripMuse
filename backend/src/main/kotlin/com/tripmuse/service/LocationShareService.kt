@@ -4,9 +4,13 @@ import com.tripmuse.domain.FriendshipStatus
 import com.tripmuse.domain.LocationShare
 import com.tripmuse.domain.LocationShareStatus
 import com.tripmuse.domain.LocationShareUiStatus
+import com.tripmuse.domain.UserLocation
+import com.tripmuse.dto.FriendLocationResponse
 import com.tripmuse.dto.LocationShareStatusResponse
+import com.tripmuse.dto.UpdateLocationRequest
 import com.tripmuse.repository.FriendshipRepository
 import com.tripmuse.repository.LocationShareRepository
+import com.tripmuse.repository.UserLocationRepository
 import com.tripmuse.repository.UserRepository
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -17,8 +21,56 @@ import org.springframework.web.server.ResponseStatusException
 class LocationShareService(
     private val locationShareRepository: LocationShareRepository,
     private val friendshipRepository: FriendshipRepository,
+    private val userLocationRepository: UserLocationRepository,
     private val userRepository: UserRepository
 ) {
+
+    /**
+     * 내 현재 위치 갱신 (사용자당 한 행 유지)
+     */
+    @Transactional
+    fun updateMyLocation(userId: Long, request: UpdateLocationRequest) {
+        val existing = userLocationRepository.findByUserId(userId)
+        if (existing != null) {
+            existing.update(request.latitude, request.longitude, request.accuracy)
+            return
+        }
+        val user = userRepository.findById(userId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다") }
+        userLocationRepository.save(
+            UserLocation(
+                user = user,
+                latitude = request.latitude,
+                longitude = request.longitude,
+                accuracy = request.accuracy
+            )
+        )
+    }
+
+    /**
+     * 친구의 현재 위치 조회. 위치 공유가 APPROVED 상태일 때만 허용한다.
+     * 친구가 아직 위치를 올리지 않았으면 좌표가 null인 응답을 반환한다.
+     */
+    @Transactional(readOnly = true)
+    fun getFriendLocation(userId: Long, friendId: Long): FriendLocationResponse {
+        val share = locationShareRepository.findByPair(userId, friendId)
+        if (share == null || share.status != LocationShareStatus.APPROVED) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "위치 공유가 승인되지 않은 친구입니다")
+        }
+
+        val friend = userRepository.findById(friendId)
+            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "친구를 찾을 수 없습니다") }
+        val location = userLocationRepository.findByUserId(friendId)
+
+        return FriendLocationResponse(
+            friendId = friendId,
+            nickname = friend.nickname,
+            latitude = location?.latitude,
+            longitude = location?.longitude,
+            accuracy = location?.accuracy,
+            recordedAt = location?.recordedAt
+        )
+    }
 
     /**
      * 위치 공유 요청: 상대 친구 화면에 승인 버튼이 노출되는 REQUESTED 상태를 만든다.

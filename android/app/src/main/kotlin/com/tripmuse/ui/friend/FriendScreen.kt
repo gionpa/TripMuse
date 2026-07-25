@@ -1,5 +1,7 @@
 package com.tripmuse.ui.friend
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,6 +38,7 @@ import com.tripmuse.data.model.Friend
 import com.tripmuse.data.model.Invitation
 import com.tripmuse.data.model.LocationShareStatus
 import com.tripmuse.data.model.UserSearchResult
+import com.tripmuse.ui.location.FriendLocationDialog
 import com.tripmuse.ui.theme.TripMuseAccents
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,11 +52,28 @@ fun FriendScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // 위치 권한: 없으면 탭 진입 시 한 번 요청하고, 허용되면 내 위치를 올린다
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { granted ->
+        if (granted.values.any { it }) viewModel.uploadMyLocation()
+    }
+
     // 탭 복귀 시 위치 공유 상태 등 최신화 (상대방의 요청/승인 반영)
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.loadFriends()
             viewModel.loadInvitations()
+            if (viewModel.hasLocationPermission()) {
+                viewModel.uploadMyLocation()
+            } else {
+                locationPermissionLauncher.launch(
+                    arrayOf(
+                        android.Manifest.permission.ACCESS_FINE_LOCATION,
+                        android.Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
+                )
+            }
         }
     }
 
@@ -440,48 +460,12 @@ fun FriendItem(
     var showRemoveDialog by remember { mutableStateOf(false) }
     var showLocationDialog by remember { mutableStateOf(false) }
 
-    // 현재 위치보기: 지도 연동 전 placeholder 다이얼로그
+    // 현재 위치보기: 국내는 네이버 지도, 해외는 구글 지도
     if (showLocationDialog) {
-        AlertDialog(
-            onDismissRequest = { showLocationDialog = false },
-            title = { Text("${friend.nickname}님의 현재 위치") },
-            text = {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    // TODO(map): 지도 SDK 연동 시 이 영역을 지도 뷰로 교체
-                    Box(contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Default.Map,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "지도 표시 기능 준비 중입니다",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "곧 ${friend.nickname}님의 위치를 확인할 수 있어요",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showLocationDialog = false }) {
-                    Text("닫기")
-                }
-            }
+        FriendLocationDialog(
+            friendId = friend.id,
+            friendNickname = friend.nickname,
+            onDismiss = { showLocationDialog = false }
         )
     }
 

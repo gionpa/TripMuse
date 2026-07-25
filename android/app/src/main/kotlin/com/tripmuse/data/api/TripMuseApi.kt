@@ -220,6 +220,16 @@ interface TripMuseApi {
         @Path("friendId") friendId: Long
     ): Response<LocationShareStatusResponse>
 
+    @PUT("users/me/location")
+    suspend fun updateMyLocation(
+        @Body request: UpdateLocationRequest
+    ): Response<Unit>
+
+    @GET("friends/{friendId}/location")
+    suspend fun getFriendLocation(
+        @Path("friendId") friendId: Long
+    ): Response<FriendLocation>
+
     // Chat
     @POST("chats")
     suspend fun getOrCreateChatRoom(
