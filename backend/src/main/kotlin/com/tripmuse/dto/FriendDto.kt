@@ -1,6 +1,7 @@
 package com.tripmuse.dto
 
 import com.tripmuse.domain.Friendship
+import com.tripmuse.domain.LocationShareUiStatus
 import com.tripmuse.domain.User
 import java.time.LocalDateTime
 
@@ -9,20 +10,30 @@ data class FriendResponse(
     val email: String,
     val nickname: String,
     val profileImageUrl: String?,
-    val addedAt: LocalDateTime
+    val addedAt: LocalDateTime,
+    val locationShareStatus: LocationShareUiStatus = LocationShareUiStatus.NONE
 ) {
     companion object {
-        fun from(friendship: Friendship): FriendResponse {
+        fun from(
+            friendship: Friendship,
+            locationShareStatus: LocationShareUiStatus = LocationShareUiStatus.NONE
+        ): FriendResponse {
             return FriendResponse(
                 id = friendship.friend.id,
                 email = friendship.friend.email,
                 nickname = friendship.friend.nickname,
                 profileImageUrl = friendship.friend.profileImageUrl,
-                addedAt = friendship.createdAt
+                addedAt = friendship.createdAt,
+                locationShareStatus = locationShareStatus
             )
         }
     }
 }
+
+data class LocationShareStatusResponse(
+    val friendId: Long,
+    val locationShareStatus: LocationShareUiStatus
+)
 
 data class UserSearchResponse(
     val id: Long,

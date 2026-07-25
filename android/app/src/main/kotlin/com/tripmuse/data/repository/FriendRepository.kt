@@ -5,6 +5,7 @@ import com.tripmuse.data.model.AddFriendRequest
 import com.tripmuse.data.model.Friend
 import com.tripmuse.data.model.FriendListResponse
 import com.tripmuse.data.model.InvitationListResponse
+import com.tripmuse.data.model.LocationShareStatusResponse
 import com.tripmuse.data.model.UserSearchListResponse
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -53,6 +54,41 @@ class FriendRepository @Inject constructor(
                     else -> "친구 추가에 실패했습니다"
                 }
                 Result.failure(Exception(errorMessage))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("네트워크 오류: ${e.message}"))
+        }
+    }
+
+    suspend fun requestLocationShare(friendId: Long): Result<LocationShareStatusResponse> {
+        return try {
+            val response = api.requestLocationShare(friendId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val message = when (response.code()) {
+                    403 -> "친구 관계가 아닌 사용자입니다"
+                    409 -> "이미 위치 공유가 요청되었거나 승인된 상태입니다"
+                    else -> "위치 공유 요청에 실패했습니다"
+                }
+                Result.failure(Exception(message))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("네트워크 오류: ${e.message}"))
+        }
+    }
+
+    suspend fun approveLocationShare(friendId: Long): Result<LocationShareStatusResponse> {
+        return try {
+            val response = api.approveLocationShare(friendId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val message = when (response.code()) {
+                    404 -> "승인할 위치 공유 요청이 없습니다"
+                    else -> "위치 공유 승인에 실패했습니다"
+                }
+                Result.failure(Exception(message))
             }
         } catch (e: Exception) {
             Result.failure(Exception("네트워크 오류: ${e.message}"))

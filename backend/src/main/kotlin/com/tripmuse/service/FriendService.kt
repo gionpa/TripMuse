@@ -19,13 +19,20 @@ import org.springframework.web.server.ResponseStatusException
 @Service
 class FriendService(
     private val friendshipRepository: FriendshipRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val locationShareService: LocationShareService
 ) {
 
     @Transactional(readOnly = true)
     fun getFriends(userId: Long): FriendListResponse {
         val friendships = friendshipRepository.findByUserIdAndStatus(userId, FriendshipStatus.ACCEPTED)
-        val friends = friendships.map { FriendResponse.from(it) }
+        val locationStatusMap = locationShareService.getStatusMapFor(userId)
+        val friends = friendships.map { friendship ->
+            FriendResponse.from(
+                friendship,
+                locationStatusMap[friendship.friend.id] ?: com.tripmuse.domain.LocationShareUiStatus.NONE
+            )
+        }
         return FriendListResponse(friends, friends.size)
     }
 
@@ -113,6 +120,9 @@ class FriendService(
     fun removeFriend(userId: Long, friendId: Long) {
         val friendship = friendshipRepository.findByUserIdAndFriendId(userId, friendId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "친구 관계를 찾을 수 없습니다") }
+
+        // 위치 공유 상태도 함께 정리
+        locationShareService.removeLocationShare(userId, friendId)
 
         // 정방향 친구 관계 삭제 (user -> friend)
         friendshipRepository.delete(friendship)

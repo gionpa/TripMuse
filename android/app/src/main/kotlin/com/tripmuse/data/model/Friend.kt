@@ -5,7 +5,9 @@ data class Friend(
     val email: String,
     val nickname: String,
     val profileImageUrl: String?,
-    val addedAt: String
+    val addedAt: String,
+    // Gson은 필드 누락 시 null을 넣으므로 nullable로 두고 사용처에서 NONE 처리
+    val locationShareStatus: String? = null
 )
 
 data class FriendListResponse(

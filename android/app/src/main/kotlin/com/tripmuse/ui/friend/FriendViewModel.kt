@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.tripmuse.data.model.Friend
 import com.tripmuse.data.model.Invitation
 import com.tripmuse.data.model.UserSearchResult
+import com.tripmuse.data.repository.ChatRepository
 import com.tripmuse.data.repository.FriendRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -28,7 +29,8 @@ data class FriendUiState(
 
 @HiltViewModel
 class FriendViewModel @Inject constructor(
-    private val friendRepository: FriendRepository
+    private val friendRepository: FriendRepository,
+    private val chatRepository: ChatRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FriendUiState())
@@ -187,6 +189,52 @@ class FriendViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(error = e.message)
                 }
         }
+    }
+
+    fun requestLocationShare(friendId: Long) {
+        viewModelScope.launch {
+            friendRepository.requestLocationShare(friendId)
+                .onSuccess { response ->
+                    updateFriendLocationStatus(friendId, response.locationShareStatus)
+                    _uiState.value = _uiState.value.copy(successMessage = "위치 공유를 요청했습니다")
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(error = e.message)
+                    loadFriends() // 서버 상태와 어긋났을 수 있으니 동기화
+                }
+        }
+    }
+
+    fun approveLocationShare(friendId: Long) {
+        viewModelScope.launch {
+            friendRepository.approveLocationShare(friendId)
+                .onSuccess { response ->
+                    updateFriendLocationStatus(friendId, response.locationShareStatus)
+                    _uiState.value = _uiState.value.copy(successMessage = "위치 공유를 승인했습니다")
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(error = e.message)
+                    loadFriends()
+                }
+        }
+    }
+
+    fun openChat(friendId: Long, onOpened: (Long) -> Unit) {
+        viewModelScope.launch {
+            chatRepository.getOrCreateRoom(friendId)
+                .onSuccess { room -> onOpened(room.roomId) }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(error = e.message)
+                }
+        }
+    }
+
+    private fun updateFriendLocationStatus(friendId: Long, status: String) {
+        _uiState.value = _uiState.value.copy(
+            friends = _uiState.value.friends.map { friend ->
+                if (friend.id == friendId) friend.copy(locationShareStatus = status) else friend
+            }
+        )
     }
 
     fun clearError() {

@@ -209,6 +209,49 @@ interface TripMuseApi {
     @GET("friends/invitations")
     suspend fun getInvitations(): Response<InvitationListResponse>
 
+    // Location share
+    @POST("friends/{friendId}/location-share/request")
+    suspend fun requestLocationShare(
+        @Path("friendId") friendId: Long
+    ): Response<LocationShareStatusResponse>
+
+    @POST("friends/{friendId}/location-share/approve")
+    suspend fun approveLocationShare(
+        @Path("friendId") friendId: Long
+    ): Response<LocationShareStatusResponse>
+
+    // Chat
+    @POST("chats")
+    suspend fun getOrCreateChatRoom(
+        @Body request: CreateChatRoomRequest
+    ): Response<ChatRoom>
+
+    @GET("chats")
+    suspend fun getChatRooms(): Response<ChatRoomListResponse>
+
+    @GET("chats/{roomId}")
+    suspend fun getChatRoom(
+        @Path("roomId") roomId: Long
+    ): Response<ChatRoom>
+
+    @GET("chats/{roomId}/messages")
+    suspend fun getChatMessages(
+        @Path("roomId") roomId: Long,
+        @Query("beforeId") beforeId: Long? = null,
+        @Query("afterId") afterId: Long? = null
+    ): Response<ChatMessageListResponse>
+
+    @POST("chats/{roomId}/messages")
+    suspend fun sendChatMessage(
+        @Path("roomId") roomId: Long,
+        @Body request: SendMessageRequest
+    ): Response<ChatMessage>
+
+    @POST("chats/{roomId}/read")
+    suspend fun markChatAsRead(
+        @Path("roomId") roomId: Long
+    ): Response<Unit>
+
     @POST("friends/invitations/{invitationId}/accept")
     suspend fun acceptInvitation(
         @Path("invitationId") invitationId: Long

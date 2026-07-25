@@ -25,19 +25,33 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.Friend
 import com.tripmuse.data.model.Invitation
+import com.tripmuse.data.model.LocationShareStatus
 import com.tripmuse.data.model.UserSearchResult
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FriendScreen(
+    onNavigateToChatRoom: (Long) -> Unit = {},
     viewModel: FriendViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // 탭 복귀 시 위치 공유 상태 등 최신화 (상대방의 요청/승인 반영)
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.loadFriends()
+            viewModel.loadInvitations()
+        }
+    }
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
@@ -206,7 +220,10 @@ fun FriendScreen(
                             items(uiState.friends) { friend ->
                                 FriendItem(
                                     friend = friend,
-                                    onRemoveFriend = { viewModel.removeFriend(friend.id) }
+                                    onRemoveFriend = { viewModel.removeFriend(friend.id) },
+                                    onRequestLocationShare = { viewModel.requestLocationShare(friend.id) },
+                                    onApproveLocationShare = { viewModel.approveLocationShare(friend.id) },
+                                    onChatClick = { viewModel.openChat(friend.id) { roomId -> onNavigateToChatRoom(roomId) } }
                                 )
                             }
                         }
@@ -405,10 +422,59 @@ fun InvitationSection(
 @Composable
 fun FriendItem(
     friend: Friend,
-    onRemoveFriend: () -> Unit
+    onRemoveFriend: () -> Unit,
+    onRequestLocationShare: () -> Unit = {},
+    onApproveLocationShare: () -> Unit = {},
+    onChatClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var showRemoveDialog by remember { mutableStateOf(false) }
+    var showLocationDialog by remember { mutableStateOf(false) }
+
+    // 현재 위치보기: 지도 연동 전 placeholder 다이얼로그
+    if (showLocationDialog) {
+        AlertDialog(
+            onDismissRequest = { showLocationDialog = false },
+            title = { Text("${friend.nickname}님의 현재 위치") },
+            text = {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    // TODO(map): 지도 SDK 연동 시 이 영역을 지도 뷰로 교체
+                    Box(contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.Map,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "지도 표시 기능 준비 중입니다",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "곧 ${friend.nickname}님의 위치를 확인할 수 있어요",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLocationDialog = false }) {
+                    Text("닫기")
+                }
+            }
+        )
+    }
 
     if (showRemoveDialog) {
         AlertDialog(
@@ -442,7 +508,7 @@ fun FriendItem(
         shape = cardShape,
         color = MaterialTheme.colorScheme.surface
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
@@ -454,69 +520,134 @@ fun FriendItem(
                     ),
                     shape = cardShape
                 )
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
-            // Avatar
-            if (friend.profileImageUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(ApiModule.BASE_URL.trimEnd('/') + friend.profileImageUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "프로필 이미지",
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Surface(
-                    modifier = Modifier.size(54.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = friend.nickname.take(1),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Avatar
+                if (friend.profileImageUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(ApiModule.BASE_URL.trimEnd('/') + friend.profileImageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "프로필 이미지",
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier.size(54.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = friend.nickname.take(1),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(14.dp))
 
-            // Info
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = friend.nickname,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = friend.email,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Remove button (chip-style)
-            AssistChip(
-                onClick = { showRemoveDialog = true },
-                label = { Text("삭제") },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.PersonRemove,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                // Info
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = friend.nickname,
+                        style = MaterialTheme.typography.titleMedium
                     )
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    labelColor = MaterialTheme.colorScheme.onErrorContainer
+                    Text(
+                        text = friend.email,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Remove button (chip-style)
+                AssistChip(
+                    onClick = { showRemoveDialog = true },
+                    label = { Text("삭제") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.PersonRemove,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        labelColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
                 )
-            )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 위치 공유 상태별 버튼 + 채팅 버튼
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                when (friend.locationShareStatus ?: LocationShareStatus.NONE) {
+                    LocationShareStatus.REQUESTED_BY_ME -> {
+                        OutlinedButton(
+                            onClick = { },
+                            enabled = false,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("위치 공유 요청됨")
+                        }
+                    }
+                    LocationShareStatus.PENDING_MY_APPROVAL -> {
+                        Button(
+                            onClick = onApproveLocationShare,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("위치 공유 승인")
+                        }
+                    }
+                    LocationShareStatus.APPROVED -> {
+                        Button(
+                            onClick = { showLocationDialog = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("현재 위치보기")
+                        }
+                    }
+                    else -> {
+                        OutlinedButton(
+                            onClick = onRequestLocationShare,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("위치 공유 요청")
+                        }
+                    }
+                }
+
+                FilledTonalButton(
+                    onClick = onChatClick,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.ChatBubble, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("채팅")
+                }
+            }
         }
     }
 }

@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.People
@@ -45,6 +47,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.tripmuse.data.auth.AuthEvent
 import com.tripmuse.data.auth.AuthEventManager
 import com.tripmuse.data.deeplink.DeepLinkManager
+import com.tripmuse.ui.chat.ChatListScreen
+import com.tripmuse.ui.chat.ChatRoomScreen
 import com.tripmuse.ui.share.SharedAlbumEntryScreen
 import com.tripmuse.ui.album.AlbumViewModel
 import com.tripmuse.ui.album.AlbumCreateScreen
@@ -85,6 +89,10 @@ sealed class Screen(val route: String) {
     object SharedAlbum : Screen("shared/{token}") {
         fun createRoute(token: String) = "shared/$token"
     }
+    object ChatList : Screen("chats")
+    object ChatRoom : Screen("chat/{roomId}") {
+        fun createRoute(roomId: Long) = "chat/$roomId"
+    }
 }
 
 data class BottomNavItem(
@@ -97,6 +105,7 @@ data class BottomNavItem(
 val bottomNavItems = listOf(
     BottomNavItem(Screen.Home, "앨범", Icons.Filled.Home, Icons.Outlined.Home),
     BottomNavItem(Screen.Friend, "친구", Icons.Filled.People, Icons.Outlined.People),
+    BottomNavItem(Screen.ChatList, "채팅", Icons.Filled.ChatBubble, Icons.Outlined.ChatBubbleOutline),
     BottomNavItem(Screen.Recommendation, "추천", Icons.Filled.Lightbulb, Icons.Outlined.Lightbulb),
     BottomNavItem(Screen.Profile, "프로필", Icons.Filled.Person, Icons.Outlined.Person)
 )
@@ -333,7 +342,30 @@ fun TripMuseNavHost(
             }
 
             composable(Screen.Friend.route) {
-                FriendScreen()
+                FriendScreen(
+                    onNavigateToChatRoom = { roomId ->
+                        navController.navigate(Screen.ChatRoom.createRoute(roomId))
+                    }
+                )
+            }
+
+            composable(Screen.ChatList.route) {
+                ChatListScreen(
+                    onRoomClick = { roomId ->
+                        navController.navigate(Screen.ChatRoom.createRoute(roomId))
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.ChatRoom.route,
+                arguments = listOf(navArgument("roomId") { type = NavType.LongType })
+            ) { backStackEntry ->
+                val roomId = backStackEntry.arguments?.getLong("roomId") ?: return@composable
+                ChatRoomScreen(
+                    roomId = roomId,
+                    onBackClick = { navController.popBackStack() }
+                )
             }
 
             composable(
