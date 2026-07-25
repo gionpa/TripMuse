@@ -45,6 +45,10 @@ class Album(
     var displayOrder: Int = 0
 ) : BaseEntity() {
 
+    // 외부 공유 링크 토큰 (null이면 링크 공유 비활성 상태)
+    @Column(name = "share_token", unique = true, length = 64)
+    var shareToken: String? = null
+
     @OneToMany(mappedBy = "album", cascade = [CascadeType.ALL], orphanRemoval = true)
     val mediaList: MutableList<Media> = mutableListOf()
 

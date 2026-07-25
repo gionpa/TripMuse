@@ -19,6 +19,10 @@ jwt:
   access-token-validity-in-seconds: 3600
   refresh-token-validity-in-seconds: 1209600
 
+tripmuse:
+  # 공유 링크 URL 생성에 사용되는 외부 공개 주소
+  public-base-url: ${PUBLIC_BASE_URL:https://tripmuse-production.up.railway.app}
+
 ---
 spring:
   config:

@@ -33,15 +33,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tripmuse.data.auth.AuthEvent
 import com.tripmuse.data.auth.AuthEventManager
+import com.tripmuse.data.deeplink.DeepLinkManager
+import com.tripmuse.ui.share.SharedAlbumEntryScreen
 import com.tripmuse.ui.album.AlbumViewModel
 import com.tripmuse.ui.album.AlbumCreateScreen
 import com.tripmuse.ui.album.AlbumDetailScreen
@@ -78,6 +82,9 @@ sealed class Screen(val route: String) {
         fun createRoute(albumId: Long) = "gallery/picker/$albumId"
     }
     object Settings : Screen("settings")
+    object SharedAlbum : Screen("shared/{token}") {
+        fun createRoute(token: String) = "shared/$token"
+    }
 }
 
 data class BottomNavItem(
@@ -97,10 +104,15 @@ val bottomNavItems = listOf(
 @Composable
 fun TripMuseNavHost(
     authEventManager: AuthEventManager,
+    deepLinkManager: DeepLinkManager,
     onExitApp: () -> Unit = {},
-    onNaverLoginClick: ((callback: (String?) -> Unit) -> Unit)? = null
+    onNaverLoginClick: ((callback: (String?) -> Unit) -> Unit)? = null,
+    onNavControllerReady: (NavHostController) -> Unit = {}
 ) {
     val navController = rememberNavController()
+    LaunchedEffect(navController) {
+        onNavControllerReady(navController)
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
@@ -244,12 +256,23 @@ fun TripMuseNavHost(
 
             composable(Screen.Login.route) {
                 val viewModel: com.tripmuse.ui.auth.AuthViewModel = hiltViewModel()
+                // 로그인 성공 시: 처리 대기 중인 공유 딥링크가 있으면 그쪽으로, 없으면 홈으로
+                val navigateAfterAuth: () -> Unit = {
+                    val pendingToken = deepLinkManager.consumePendingShareToken()
+                    val destination = if (pendingToken != null) {
+                        Screen.SharedAlbum.createRoute(pendingToken)
+                    } else {
+                        Screen.Home.route
+                    }
+                    navController.navigate(destination) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                }
+                LaunchedEffect(Unit) {
+                    android.util.Log.d("DeepLink", "Login screen: pendingShareToken=${deepLinkManager.pendingShareToken != null}")
+                }
                 LoginScreen(
-                    onAuthSuccess = {
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
-                        }
-                    },
+                    onAuthSuccess = navigateAfterAuth,
                     onNaverLoginClick = if (onNaverLoginClick != null) {
                         {
                             android.util.Log.d("NaverLogin", "NavGraph: onNaverLoginClick triggered")
@@ -257,9 +280,7 @@ fun TripMuseNavHost(
                                 android.util.Log.d("NaverLogin", "NavGraph: callback received, accessToken: ${accessToken?.take(20)}...")
                                 if (accessToken != null) {
                                     viewModel.authenticateNaver(accessToken) {
-                                        navController.navigate(Screen.Home.route) {
-                                            popUpTo(Screen.Login.route) { inclusive = true }
-                                        }
+                                        navigateAfterAuth()
                                     }
                                 }
                             }
@@ -387,6 +408,31 @@ fun TripMuseNavHost(
                         // 미디어 상세에서 돌아올 때 앨범 미디어 목록 새로고침 (댓글 읽음 상태 반영)
                         navController.previousBackStackEntry?.savedStateHandle?.set("refreshAlbumKey", System.currentTimeMillis())
                         navController.popBackStack()
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.SharedAlbum.route,
+                arguments = listOf(navArgument("token") { type = NavType.StringType }),
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "https://tripmuse-production.up.railway.app/share/{token}" },
+                    navDeepLink { uriPattern = "tripmuse://share/{token}" }
+                )
+            ) { backStackEntry ->
+                val token = backStackEntry.arguments?.getString("token") ?: return@composable
+                SharedAlbumEntryScreen(
+                    token = token,
+                    onResolved = { albumId ->
+                        navController.navigate(Screen.AlbumDetail.createRoute(albumId)) {
+                            popUpTo(Screen.SharedAlbum.route) { inclusive = true }
+                        }
+                    },
+                    onInvalidLink = {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.SharedAlbum.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
                     }
                 )
             }

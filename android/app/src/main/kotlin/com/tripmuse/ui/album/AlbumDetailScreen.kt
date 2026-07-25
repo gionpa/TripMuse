@@ -47,8 +47,34 @@ fun AlbumDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var isCreatingShareLink by remember { mutableStateOf(false) }
+
+    // 공유 링크 발급 후 시스템 공유 시트 표시 (카카오톡 등 외부 메신저로 전달)
+    fun shareAlbum() {
+        if (isCreatingShareLink) return
+        isCreatingShareLink = true
+        viewModel.createShareLink(albumId) { result ->
+            isCreatingShareLink = false
+            result
+                .onSuccess { shareLink ->
+                    val albumTitle = uiState.album?.title ?: "여행 앨범"
+                    val shareText = "'${albumTitle}' 여행 앨범이 공유되었어요!\n${shareLink.shareUrl}"
+                    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                    }
+                    context.startActivity(
+                        android.content.Intent.createChooser(sendIntent, "앨범 공유")
+                    )
+                }
+                .onFailure {
+                    android.widget.Toast.makeText(context, "공유 링크 생성에 실패했습니다", android.widget.Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
 
     // 화면 진입 및 복귀 시 앨범/미디어를 최신 상태로 로딩
     // repeatOnLifecycle(STARTED)를 사용하여 첫 진입 시에도 호출되고, 백그라운드에서 복귀 시에도 호출됨
@@ -97,6 +123,11 @@ fun AlbumDetailScreen(
                 },
                 actions = {
                     val isOwner = uiState.album?.isOwner == true
+                    if (isOwner) {
+                        IconButton(onClick = { shareAlbum() }, enabled = !isCreatingShareLink) {
+                            Icon(Icons.Default.Share, contentDescription = "공유")
+                        }
+                    }
                     Box {
                         IconButton(onClick = { showMenu = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = "더보기")
@@ -113,6 +144,24 @@ fun AlbumDetailScreen(
                                 },
                                 leadingIcon = {
                                     Icon(Icons.Default.Edit, contentDescription = null)
+                                },
+                                enabled = isOwner
+                            )
+                            DropdownMenuItem(
+                                text = { Text("공유 링크 해제") },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.revokeShareLink(albumId) { result ->
+                                        val message = if (result.isSuccess) {
+                                            "공유 링크가 해제되었습니다"
+                                        } else {
+                                            "공유 링크 해제에 실패했습니다"
+                                        }
+                                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.LinkOff, contentDescription = null)
                                 },
                                 enabled = isOwner
                             )

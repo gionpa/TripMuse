@@ -1,5 +1,6 @@
 package com.tripmuse
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -9,9 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavHostController
 import com.navercorp.nid.NaverIdLoginSDK
 import com.navercorp.nid.oauth.OAuthLoginCallback
 import com.tripmuse.data.auth.AuthEventManager
+import com.tripmuse.data.deeplink.DeepLinkManager
 import com.tripmuse.ui.navigation.TripMuseNavHost
 import com.tripmuse.ui.theme.TripMuseTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -23,7 +26,11 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var authEventManager: AuthEventManager
 
+    @Inject
+    lateinit var deepLinkManager: DeepLinkManager
+
     private var naverLoginCallback: ((String?) -> Unit)? = null
+    private var navController: NavHostController? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,15 +52,24 @@ class MainActivity : ComponentActivity() {
                 ) {
                     TripMuseNavHost(
                         authEventManager = authEventManager,
+                        deepLinkManager = deepLinkManager,
                         onExitApp = { finish() },
                         onNaverLoginClick = { callback ->
                             naverLoginCallback = callback
                             startNaverLogin()
-                        }
+                        },
+                        onNavControllerReady = { navController = it }
                     )
                 }
             }
         }
+    }
+
+    // singleTask 실행 중 공유 링크를 탭했을 때 딥링크 처리
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        navController?.handleDeepLink(intent)
     }
 
     private fun startNaverLogin() {

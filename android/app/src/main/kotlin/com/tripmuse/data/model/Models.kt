@@ -65,6 +65,17 @@ data class AlbumListResponse(
     val albums: List<Album>
 )
 
+// Album share link
+data class ShareLinkResponse(
+    val shareToken: String,
+    val shareUrl: String
+)
+
+data class ShareResolveResponse(
+    val albumId: Long,
+    val title: String
+)
+
 // Media
 enum class MediaType {
     IMAGE, VIDEO

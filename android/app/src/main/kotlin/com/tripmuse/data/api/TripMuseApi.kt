@@ -79,6 +79,22 @@ interface TripMuseApi {
         @Body request: ReorderAlbumsRequest
     ): Response<Unit>
 
+    // Album share link
+    @POST("albums/{albumId}/share")
+    suspend fun createShareLink(
+        @Path("albumId") albumId: Long
+    ): Response<ShareLinkResponse>
+
+    @DELETE("albums/{albumId}/share")
+    suspend fun revokeShareLink(
+        @Path("albumId") albumId: Long
+    ): Response<Unit>
+
+    @GET("share/{token}")
+    suspend fun resolveShareLink(
+        @Path("token") token: String
+    ): Response<ShareResolveResponse>
+
     // Media
     @GET("albums/{albumId}/media")
     suspend fun getMediaByAlbum(

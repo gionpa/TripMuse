@@ -15,6 +15,8 @@ interface AlbumRepository : JpaRepository<Album, Long> {
 
     fun findByUserIdAndId(userId: Long, albumId: Long): Album?
 
+    fun findByShareToken(shareToken: String): Album?
+
     fun countByUserId(userId: Long): Long
 
     @Query("SELECT COALESCE(MAX(a.displayOrder), -1) FROM Album a WHERE a.user.id = :userId")

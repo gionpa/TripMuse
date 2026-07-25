@@ -74,6 +74,18 @@ class AlbumViewModel @Inject constructor(
         }
     }
 
+    fun createShareLink(albumId: Long, onResult: (Result<com.tripmuse.data.model.ShareLinkResponse>) -> Unit) {
+        viewModelScope.launch {
+            onResult(albumRepository.createShareLink(albumId))
+        }
+    }
+
+    fun revokeShareLink(albumId: Long, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            onResult(albumRepository.revokeShareLink(albumId))
+        }
+    }
+
     private fun loadMediaPage(albumId: Long, page: Int, append: Boolean) {
         // Cancel previous media loading job to prevent concurrent access
         loadMediaJob?.cancel()

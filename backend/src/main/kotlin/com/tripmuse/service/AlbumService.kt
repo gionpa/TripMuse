@@ -1,21 +1,27 @@
 package com.tripmuse.service
 
 import com.tripmuse.domain.Album
+import com.tripmuse.domain.AlbumShareGrant
 import com.tripmuse.domain.AlbumVisibility
 import com.tripmuse.dto.request.CreateAlbumRequest
 import com.tripmuse.dto.request.UpdateAlbumRequest
 import com.tripmuse.dto.response.AlbumDetailResponse
 import com.tripmuse.dto.response.AlbumListResponse
 import com.tripmuse.dto.response.AlbumResponse
+import com.tripmuse.dto.response.ShareLinkResponse
+import com.tripmuse.dto.response.ShareResolveResponse
 import com.tripmuse.exception.ForbiddenException
 import com.tripmuse.exception.NotFoundException
 import com.tripmuse.domain.FriendshipStatus
 import com.tripmuse.repository.AlbumRepository
+import com.tripmuse.repository.AlbumShareGrantRepository
 import com.tripmuse.repository.CommentRepository
 import com.tripmuse.repository.FriendshipRepository
 import com.tripmuse.repository.MediaRepository
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
 
 @Service
 @Transactional(readOnly = true)
@@ -24,7 +30,9 @@ class AlbumService(
     private val mediaRepository: MediaRepository,
     private val commentRepository: CommentRepository,
     private val friendshipRepository: FriendshipRepository,
-    private val userService: UserService
+    private val shareGrantRepository: AlbumShareGrantRepository,
+    private val userService: UserService,
+    @Value("\${tripmuse.public-base-url}") private val publicBaseUrl: String
 ) {
     fun getAlbumsByUser(userId: Long): AlbumListResponse {
         // 내 앨범 조회
@@ -63,6 +71,9 @@ class AlbumService(
         // Owner can always access
         if (album.user.id == userId) return true
 
+        // 공유 링크로 열람 권한을 부여받은 사용자
+        if (shareGrantRepository.existsByAlbumIdAndUserId(album.id, userId)) return true
+
         return when (album.visibility ?: AlbumVisibility.PRIVATE) {
             AlbumVisibility.PUBLIC -> true
             AlbumVisibility.FRIENDS_ONLY -> friendshipRepository.existsByUserIdAndFriendIdAndStatus(
@@ -73,6 +84,49 @@ class AlbumService(
             AlbumVisibility.PRIVATE -> false
         }
     }
+
+    /**
+     * 공유 링크 발급 (이미 있으면 기존 링크 반환 — 멱등)
+     */
+    @Transactional
+    fun createShareLink(albumId: Long, userId: Long): ShareLinkResponse {
+        val album = findAlbumByIdAndUserId(albumId, userId)
+        val token = album.shareToken ?: UUID.randomUUID().toString().replace("-", "").also {
+            album.shareToken = it
+        }
+        return ShareLinkResponse(shareToken = token, shareUrl = "$publicBaseUrl/share/$token")
+    }
+
+    /**
+     * 공유 링크 해제 — 링크로 부여된 열람 권한도 함께 회수
+     */
+    @Transactional
+    fun revokeShareLink(albumId: Long, userId: Long) {
+        val album = findAlbumByIdAndUserId(albumId, userId)
+        album.shareToken = null
+        shareGrantRepository.deleteByAlbumId(albumId)
+    }
+
+    /**
+     * 공유 토큰 리졸브: 앨범을 찾고, 요청 사용자에게 열람 권한을 부여한다.
+     */
+    @Transactional
+    fun resolveShareLink(token: String, userId: Long): ShareResolveResponse {
+        val album = albumRepository.findByShareToken(token)
+            ?: throw NotFoundException("유효하지 않거나 만료된 공유 링크입니다")
+
+        if (album.user.id != userId && !shareGrantRepository.existsByAlbumIdAndUserId(album.id, userId)) {
+            val user = userService.findUserById(userId)
+            shareGrantRepository.save(AlbumShareGrant(album = album, user = user))
+        }
+
+        return ShareResolveResponse(albumId = album.id, title = album.title)
+    }
+
+    /**
+     * 랜딩 페이지용 (인증 없음) — 토큰으로 앨범 조회, 없으면 null
+     */
+    fun findAlbumByShareToken(token: String): Album? = albumRepository.findByShareToken(token)
 
     @Transactional
     fun createAlbum(userId: Long, request: CreateAlbumRequest): AlbumResponse {
@@ -121,6 +175,7 @@ class AlbumService(
     @Transactional
     fun deleteAlbum(albumId: Long, userId: Long) {
         val album = findAlbumByIdAndUserId(albumId, userId)
+        shareGrantRepository.deleteByAlbumId(albumId)
         albumRepository.delete(album)
     }
 

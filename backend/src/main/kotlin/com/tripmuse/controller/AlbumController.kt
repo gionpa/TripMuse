@@ -6,6 +6,7 @@ import com.tripmuse.dto.request.UpdateAlbumRequest
 import com.tripmuse.dto.response.AlbumDetailResponse
 import com.tripmuse.dto.response.AlbumListResponse
 import com.tripmuse.dto.response.AlbumResponse
+import com.tripmuse.dto.response.ShareLinkResponse
 import com.tripmuse.security.CustomUserDetails
 import com.tripmuse.service.AlbumService
 import jakarta.validation.Valid
@@ -61,6 +62,23 @@ class AlbumController(
         @PathVariable albumId: Long
     ): ResponseEntity<Void> {
         albumService.deleteAlbum(albumId, user.id)
+        return ResponseEntity.noContent().build()
+    }
+
+    @PostMapping("/{albumId}/share")
+    fun createShareLink(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable albumId: Long
+    ): ResponseEntity<ShareLinkResponse> {
+        return ResponseEntity.ok(albumService.createShareLink(albumId, user.id))
+    }
+
+    @DeleteMapping("/{albumId}/share")
+    fun revokeShareLink(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable albumId: Long
+    ): ResponseEntity<Void> {
+        albumService.revokeShareLink(albumId, user.id)
         return ResponseEntity.noContent().build()
     }
 
