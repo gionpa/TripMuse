@@ -55,14 +55,15 @@ class MainActivity : ComponentActivity() {
             notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        // 앱이 화면에 보이는 동안만 heartbeat/친구 접속 감지를 돌린다
+        // heartbeat는 화면에 보이는 동안만 (= 온라인 표시가 실제 사용 중을 뜻하게)
+        // 친구 접속 감지는 TripMuseApp에서 프로세스 단위로 계속 돌린다
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                presenceMonitor.start(this)
+                presenceMonitor.startHeartbeat(this)
                 try {
                     awaitCancellation()
                 } finally {
-                    presenceMonitor.stop()
+                    presenceMonitor.stopHeartbeat()
                 }
             }
         }

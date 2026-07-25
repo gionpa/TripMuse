@@ -20,11 +20,14 @@ private const val POLL_INTERVAL_MS = 30_000L
 private const val TAG = "PresenceMonitor"
 
 /**
- * 앱이 화면에 보이는 동안 동작한다.
- *  - 내 접속 상태를 heartbeat로 유지
- *  - 친구 접속 상태를 폴링해, 오프라인 → 온라인으로 바뀐 친구를 알림으로 알려준다
+ * 접속 상태를 다루는 두 흐름의 생명주기가 다르다.
  *
- * 앱이 완전히 종료된 동안에는 동작하지 않는다 (백그라운드 푸시는 FCM 도입 시 대응).
+ *  - heartbeat: 앱이 화면에 보이는 동안만. "온라인"은 지금 앱을 보고 있다는 뜻이어야 하므로,
+ *    백그라운드에서 계속 보내면 몇 시간 전에 앱을 내린 사람도 온라인으로 남는다.
+ *  - 친구 접속 감시: 앱 프로세스가 살아 있는 동안 계속. 알림이 정작 필요한 순간은
+ *    앱을 다른 화면으로 내려둔 때이므로 화면 표시 여부와 묶지 않는다.
+ *
+ * 앱이 완전히 종료되면 감시도 멈춘다 (그 경우까지 알림을 보내려면 FCM이 필요).
  */
 @Singleton
 class PresenceMonitor @Inject constructor(
@@ -44,9 +47,9 @@ class PresenceMonitor @Inject constructor(
     private val _onlineFriendIds = MutableStateFlow<Set<Long>>(emptySet())
     val onlineFriendIds: StateFlow<Set<Long>> = _onlineFriendIds.asStateFlow()
 
-    fun start(scope: CoroutineScope) {
+    /** 앱이 화면에 보이는 동안 호출 — 내 접속 상태를 유지한다 */
+    fun startHeartbeat(scope: CoroutineScope) {
         if (heartbeatJob?.isActive == true) return
-
         heartbeatJob = scope.launch {
             while (isActive) {
                 if (tokenManager.getAccessTokenSync() != null) {
@@ -55,7 +58,16 @@ class PresenceMonitor @Inject constructor(
                 delay(HEARTBEAT_INTERVAL_MS)
             }
         }
+    }
 
+    fun stopHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+    }
+
+    /** 앱 실행 중(백그라운드 포함) 계속 호출 — 친구 접속을 감지해 알림을 띄운다 */
+    fun startWatching(scope: CoroutineScope) {
+        if (pollJob?.isActive == true) return
         pollJob = scope.launch {
             while (isActive) {
                 if (tokenManager.getAccessTokenSync() != null) {
@@ -64,13 +76,6 @@ class PresenceMonitor @Inject constructor(
                 delay(POLL_INTERVAL_MS)
             }
         }
-    }
-
-    fun stop() {
-        heartbeatJob?.cancel()
-        pollJob?.cancel()
-        heartbeatJob = null
-        pollJob = null
     }
 
     /** 로그아웃/계정 전환 시 이전 계정의 상태가 새 계정 알림에 섞이지 않게 초기화한다 */
