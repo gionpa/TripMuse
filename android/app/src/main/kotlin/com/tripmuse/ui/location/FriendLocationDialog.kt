@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOff
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,14 +22,6 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
-import com.google.maps.android.compose.MapUiSettings
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.rememberCameraPositionState
 import com.tripmuse.BuildConfig
 import com.tripmuse.data.model.FriendLocation
 import com.tripmuse.data.model.MapRegion
@@ -113,13 +106,13 @@ fun FriendLocationDialog(
                         val subtitle = uiState.location
                             ?.takeIf { it.hasLocation }
                             ?.let { loc ->
-                                val provider = if (MapRegion.isDomestic(loc.latitude!!, loc.longitude!!)) {
+                                val label = if (MapRegion.isDomestic(loc.latitude!!, loc.longitude!!)) {
                                     "네이버 지도"
                                 } else {
-                                    "구글 지도"
+                                    "해외 위치"
                                 }
                                 val time = formatRoomListTime(loc.recordedAt)
-                                if (time.isNotEmpty()) "$provider · $time 기준" else provider
+                                if (time.isNotEmpty()) "$label · $time 기준" else label
                             }
                         if (subtitle != null) {
                             Text(
@@ -185,21 +178,8 @@ fun FriendLocationDialog(
                                     )
                                 }
                             } else {
-                                if (BuildConfig.GOOGLE_MAPS_API_KEY.isBlank()) {
-                                    MissingKeyState(
-                                        provider = "구글 지도",
-                                        key = "google.maps.apiKey",
-                                        latitude = lat,
-                                        longitude = lon
-                                    )
-                                } else {
-                                    GoogleLocationMap(
-                                        latitude = lat,
-                                        longitude = lon,
-                                        title = friendNickname,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
+                                // 해외 지도 표시는 향후 제공 예정 — 좌표만 안내한다
+                                OverseasComingSoonState(latitude = lat, longitude = lon)
                             }
                         }
                     }
@@ -232,24 +212,52 @@ fun FriendLocationDialog(
     }
 }
 
+/**
+ * 해외 좌표: 지도 표시는 향후 제공 예정이라 좌표와 안내만 보여준다.
+ */
 @Composable
-private fun GoogleLocationMap(
+private fun BoxScope.OverseasComingSoonState(
     latitude: Double,
-    longitude: Double,
-    title: String,
-    modifier: Modifier = Modifier
+    longitude: Double
 ) {
-    val target = LatLng(latitude, longitude)
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(target, 14f)
-    }
-    GoogleMap(
-        modifier = modifier,
-        cameraPositionState = cameraPositionState,
-        properties = MapProperties(isMyLocationEnabled = false),
-        uiSettings = MapUiSettings(zoomControlsEnabled = true, myLocationButtonEnabled = false)
+    Column(
+        modifier = Modifier
+            .align(Alignment.Center)
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Marker(state = MarkerState(position = target), title = title)
+        Icon(
+            Icons.Default.Public,
+            contentDescription = null,
+            modifier = Modifier.size(44.dp),
+            tint = TripMuseAccents.Recommend.accent
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+        Text(
+            text = "해외에 있어요",
+            style = MaterialTheme.typography.titleSmall,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "해외 지도 표시는 향후 제공될 예정입니다.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(18.dp))
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = TripMuseAccents.Recommend.container
+        ) {
+            Text(
+                text = String.format("위도 %.5f\n경도 %.5f", latitude, longitude),
+                style = MaterialTheme.typography.bodyMedium,
+                color = TripMuseAccents.Recommend.deep,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+            )
+        }
     }
 }
 

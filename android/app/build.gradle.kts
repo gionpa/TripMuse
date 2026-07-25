@@ -9,14 +9,12 @@ plugins {
 }
 
 // 지도 API 키는 local.properties에 보관한다 (git에 커밋되지 않음)
-//   naver.maps.clientId=<NCP Maps 클라이언트 ID>
-//   google.maps.apiKey=<Google Maps SDK for Android 키>
+//   naver.maps.clientId=<NCP 콘솔에서 발급한 Maps 키 ID>
 val localProps = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use { load(it) }
 }
 val naverMapsClientId: String = localProps.getProperty("naver.maps.clientId") ?: ""
-val googleMapsApiKey: String = localProps.getProperty("google.maps.apiKey") ?: ""
 
 android {
     namespace = "com.tripmuse"
@@ -35,9 +33,7 @@ android {
         }
 
         manifestPlaceholders["naverMapsClientId"] = naverMapsClientId
-        manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey
         buildConfigField("String", "NAVER_MAPS_CLIENT_ID", "\"$naverMapsClientId\"")
-        buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsApiKey\"")
     }
 
     signingConfigs {
@@ -151,10 +147,8 @@ dependencies {
     // Naver Login SDK
     implementation("com.navercorp.nid:oauth:5.10.0")
 
-    // Maps: 국내는 네이버 지도, 해외는 구글 지도
+    // Maps: 국내는 네이버 지도 (해외 지도 표시는 향후 제공 예정)
     implementation("com.naver.maps:map-sdk:3.23.3")
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
-    implementation("com.google.maps.android:maps-compose:4.3.3")
 
     // 현재 위치 수집
     implementation("com.google.android.gms:play-services-location:21.2.0")
