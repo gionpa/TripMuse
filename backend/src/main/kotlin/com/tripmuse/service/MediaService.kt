@@ -35,7 +35,8 @@ class MediaService(
     private val albumService: AlbumService,
     private val storageService: StorageService,
     private val geocodingService: GeocodingService,
-    private val userService: UserService
+    private val userService: UserService,
+    private val notificationService: NotificationService
 ) {
     private val logger = LoggerFactory.getLogger(MediaService::class.java)
 
@@ -226,6 +227,10 @@ class MediaService(
         if (thumbnailPath != null) {
             albumService.updateCoverImageIfEmpty(albumId, "/media/files/$thumbnailPath")
         }
+
+        // 공유 앨범이면 함께 보는 사람들에게 알림 (실패해도 업로드는 성공 처리)
+        runCatching { notificationService.notifyAlbumMediaAdded(album, userId) }
+            .onFailure { logger.warn("미디어 알림 생성 실패: albumId=$albumId", it) }
 
         return MediaResponse.from(savedMedia)
     }

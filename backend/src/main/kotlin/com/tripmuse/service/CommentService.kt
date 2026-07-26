@@ -22,8 +22,11 @@ class CommentService(
     private val commentReadRepository: CommentReadRepository,
     private val mediaService: MediaService,
     private val albumService: AlbumService,
-    private val userService: UserService
+    private val userService: UserService,
+    private val notificationService: NotificationService
 ) {
+    private val logger = org.slf4j.LoggerFactory.getLogger(CommentService::class.java)
+
     fun getComments(mediaId: Long, userId: Long): CommentListResponse {
         val media = mediaService.findMediaById(mediaId)
         albumService.getAlbumDetail(media.album.id, userId)
@@ -48,6 +51,11 @@ class CommentService(
         )
 
         val savedComment = commentRepository.save(comment)
+
+        // 공유 앨범이면 소유자·다른 열람자에게 알림 (실패해도 댓글 작성은 성공 처리)
+        runCatching { notificationService.notifyAlbumComment(media.album, userId) }
+            .onFailure { logger.warn("댓글 알림 생성 실패: mediaId=$mediaId", it) }
+
         return CommentResponse.from(savedComment)
     }
 
