@@ -49,10 +49,6 @@ spring:
     username: tripmuse
     password: tripmuse
     driver-class-name: org.postgresql.Driver
-
-# 로컬 개발 편의를 위한 기본 JWT 키 (운영에는 절대 쓰이지 않는다 — prod는 JWT_SECRET 필수)
-jwt:
-  secret: ${JWT_SECRET:TripMuseLocalDevSecretKeyMustBe32BytesLong}
   jpa:
     hibernate:
       ddl-auto: update
@@ -61,6 +57,10 @@ jwt:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# 로컬 개발 편의를 위한 기본 JWT 키 (운영에는 절대 쓰이지 않는다 — prod는 JWT_SECRET 필수)
+jwt:
+  secret: ${JWT_SECRET:TripMuseLocalDevSecretKeyMustBe32BytesLong}
 
 storage:
   type: local
