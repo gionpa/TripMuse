@@ -83,6 +83,16 @@ class ChatController(
         return ResponseEntity.status(HttpStatus.CREATED).body(message)
     }
 
+    @PostMapping("/{roomId}/messages/video")
+    fun sendVideoMessage(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable roomId: Long,
+        @RequestParam("file") file: MultipartFile
+    ): ResponseEntity<ChatMessageResponse> {
+        val message = chatService.sendVideoMessage(roomId, user.id, file)
+        return ResponseEntity.status(HttpStatus.CREATED).body(message)
+    }
+
     @PostMapping("/{roomId}/members")
     fun inviteMembers(
         @AuthenticationPrincipal user: CustomUserDetails,

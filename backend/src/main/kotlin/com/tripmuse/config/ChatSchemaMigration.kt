@@ -44,7 +44,7 @@ class ChatSchemaMigration {
         // 4) enum CHECK 제약 갱신.
         //    Hibernate는 테이블을 만들 때만 CHECK를 생성하므로, enum에 값이 추가되면
         //    (TEXT/IMAGE → SYSTEM) 기존 제약이 새 값을 거부한다.
-        refreshEnumCheck(jdbcTemplate, "chat_messages", "type", listOf("TEXT", "IMAGE", "SYSTEM"))
+        refreshEnumCheck(jdbcTemplate, "chat_messages", "type", listOf("TEXT", "IMAGE", "VIDEO", "SYSTEM"))
         refreshEnumCheck(jdbcTemplate, "chat_rooms", "type", listOf("DIRECT", "GROUP"))
 
         // 5) 레거시 참여자 컬럼 정리.

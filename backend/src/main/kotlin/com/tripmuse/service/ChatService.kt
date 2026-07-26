@@ -28,6 +28,7 @@ import java.util.UUID
 
 private const val MESSAGE_PAGE_SIZE = 50
 private const val MAX_MEMBERS = 30
+private val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
 
 @Service
 class ChatService(
@@ -173,6 +174,36 @@ class ChatService(
     }
 
     /**
+     * 동영상 메시지 전송. 원본을 그대로 저장하고 첫 프레임으로 썸네일을 만든다.
+     */
+    @Transactional
+    fun sendVideoMessage(roomId: Long, userId: Long, file: MultipartFile): ChatMessageResponse {
+        if (file.isEmpty) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "빈 파일은 전송할 수 없습니다")
+        }
+        val contentType = file.contentType ?: ""
+        if (!contentType.startsWith("video/")) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "동영상 파일만 전송할 수 있습니다")
+        }
+        findRoomAndMember(roomId, userId)
+
+        val extension = file.originalFilename
+            ?.substringAfterLast('.', "")
+            ?.takeIf { it.isNotBlank() }
+            ?: "mp4"
+        val relativePath = "chat/${UUID.randomUUID()}.$extension"
+        storageService.storeMultipartFileAtPath(file, relativePath)
+
+        // 썸네일 생성은 실패해도 전송 자체는 막지 않는다 (앱에서 재생 아이콘만 보여준다)
+        val thumbnailPath = runCatching { storageService.generateVideoThumbnail(relativePath) }
+            .onFailure { logger.warn("Chat video thumbnail failed for $relativePath: ${it.message}") }
+            .getOrNull()
+
+        logger.info("Chat video stored: path=$relativePath, size=${file.size}, thumbnail=$thumbnailPath")
+        return saveMessage(roomId, userId, "동영상", ChatMessageType.VIDEO, relativePath, thumbnailPath)
+    }
+
+    /**
      * 친구를 방에 초대한다. 1:1 방이면 그룹방으로 전환되고 대화 이력은 그대로 남는다.
      *
      * @param request.shareHistory true면 이전 대화까지 보이고, false면 초대 이후 메시지만 보인다
@@ -257,7 +288,8 @@ class ChatService(
         userId: Long,
         content: String,
         type: ChatMessageType,
-        imagePath: String?
+        imagePath: String?,
+        thumbnailPath: String? = null
     ): ChatMessageResponse {
         val (room, member) = findRoomAndMember(roomId, userId)
         val message = chatMessageRepository.save(
@@ -266,7 +298,8 @@ class ChatService(
                 sender = member.user,
                 content = content,
                 type = type,
-                imagePath = imagePath
+                imagePath = imagePath,
+                thumbnailPath = thumbnailPath
             )
         )
 

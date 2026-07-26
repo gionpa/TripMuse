@@ -26,14 +26,19 @@ class ChatMessage(
     @org.hibernate.annotations.ColumnDefault("'TEXT'")
     val type: ChatMessageType? = ChatMessageType.TEXT,
 
-    /** 이미지 메시지의 저장 경로 (예: chat/uuid.jpg) */
+    /** 사진/동영상 메시지의 저장 경로 (예: chat/uuid.jpg) */
     @Column(length = 500)
-    val imagePath: String? = null
+    val imagePath: String? = null,
+
+    /** 동영상 메시지의 썸네일 경로 */
+    @Column(length = 500)
+    val thumbnailPath: String? = null
 ) : BaseEntity()
 
 enum class ChatMessageType {
     TEXT,
     IMAGE,
+    VIDEO,
 
     /** 입장·퇴장 안내처럼 시스템이 남기는 메시지 (가운데 정렬로 표시) */
     SYSTEM

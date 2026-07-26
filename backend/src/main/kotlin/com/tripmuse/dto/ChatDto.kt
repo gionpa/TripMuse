@@ -49,8 +49,10 @@ data class ChatMessageResponse(
     /** 아직 읽지 않은 참여자 수. 카카오톡의 말풍선 옆 숫자와 같은 의미 */
     val unreadCount: Int = 0,
     val type: ChatMessageType = ChatMessageType.TEXT,
-    /** 이미지 메시지일 때 전체 URL (/media/files/...) */
-    val imageUrl: String? = null
+    /** 사진/동영상 메시지의 파일 URL (/media/files/...) */
+    val imageUrl: String? = null,
+    /** 동영상 메시지의 썸네일 URL */
+    val thumbnailUrl: String? = null
 ) {
     companion object {
         fun from(message: ChatMessage, requestUserId: Long, unreadCount: Int = 0): ChatMessageResponse {
@@ -65,7 +67,8 @@ data class ChatMessageResponse(
                 isMine = message.sender.id == requestUserId,
                 unreadCount = unreadCount,
                 type = message.type ?: ChatMessageType.TEXT,
-                imageUrl = message.imagePath?.let { "/media/files/$it" }
+                imageUrl = message.imagePath?.let { "/media/files/$it" },
+                thumbnailUrl = message.thumbnailPath?.let { "/media/files/$it" }
             )
         }
     }
