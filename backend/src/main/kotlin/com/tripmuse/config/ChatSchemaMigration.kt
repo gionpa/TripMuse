@@ -30,22 +30,71 @@ class ChatSchemaMigration {
         // 1) 두 사람당 방 하나를 강제했던 제약 해제
         runQuietly(jdbcTemplate, "ALTER TABLE chat_rooms DROP CONSTRAINT IF EXISTS uk_chat_room_pair")
 
-        // 2) 레거시 컬럼은 더 이상 채우지 않으므로 NULL을 허용해야 새 방 INSERT가 통과한다
-        if (columnExists(jdbcTemplate, "chat_rooms", "user1_id")) {
-            runQuietly(jdbcTemplate, "ALTER TABLE chat_rooms ALTER COLUMN user1_id DROP NOT NULL")
-            runQuietly(jdbcTemplate, "ALTER TABLE chat_rooms ALTER COLUMN user2_id DROP NOT NULL")
-        }
-
-        // 3) type이 비어 있는 기존 방은 1:1로 표시
+        // 2) type이 비어 있는 기존 방은 1:1로 표시
         runQuietly(jdbcTemplate, "UPDATE chat_rooms SET type = 'DIRECT' WHERE type IS NULL")
 
-        // 4) 참여자 백필 + 읽음 위치 보정 (이미 있는 행도 lastRead가 0이면 채운다)
+        // 3) 참여자 백필 + 읽음 위치 보정 (이미 있는 행도 lastRead가 밀려 있으면 채운다)
         if (columnExists(jdbcTemplate, "chat_rooms", "user1_id")) {
             val changed = backfillMembers(jdbcTemplate)
             if (changed > 0) {
                 logger.info("Chat migration: backfilled/updated $changed chat_room_members rows")
             }
         }
+
+        // 4) 레거시 참여자 컬럼 정리.
+        //    엔티티에서 빠졌으므로 NOT NULL이 남아 있으면 새 방 INSERT가 실패한다.
+        //    NULL 허용으로 못 바꾸면, 백필이 끝난 것을 확인한 뒤 컬럼을 제거한다.
+        relaxOrDropLegacyColumns(jdbcTemplate)
+    }
+
+    private fun relaxOrDropLegacyColumns(jdbcTemplate: JdbcTemplate) {
+        val legacyColumns = listOf("user1_id", "user2_id")
+        if (legacyColumns.none { columnExists(jdbcTemplate, "chat_rooms", it) }) return
+
+        legacyColumns.forEach { column ->
+            if (isNotNull(jdbcTemplate, "chat_rooms", column)) {
+                runQuietly(jdbcTemplate, "ALTER TABLE chat_rooms ALTER COLUMN $column DROP NOT NULL")
+            }
+        }
+
+        val stillBlocking = legacyColumns.filter { isNotNull(jdbcTemplate, "chat_rooms", it) }
+        if (stillBlocking.isEmpty()) return
+
+        if (!everyRoomHasMember(jdbcTemplate)) {
+            logger.error(
+                "Chat migration: $stillBlocking still NOT NULL but member backfill is incomplete — " +
+                    "leaving columns alone. New chat rooms cannot be created until this is resolved."
+            )
+            return
+        }
+
+        // 참여자 정보가 chat_room_members로 모두 옮겨진 것을 확인했으므로 제거해도 안전하다
+        logger.warn("Chat migration: dropping legacy columns $stillBlocking after verifying member backfill")
+        stillBlocking.forEach { column ->
+            runQuietly(jdbcTemplate, "ALTER TABLE chat_rooms DROP COLUMN IF EXISTS $column")
+        }
+    }
+
+    private fun isNotNull(jdbcTemplate: JdbcTemplate, table: String, column: String): Boolean {
+        val nullable = jdbcTemplate.query(
+            "SELECT is_nullable FROM information_schema.columns WHERE table_name = ? AND column_name = ?",
+            { rs, _ -> rs.getString("is_nullable") },
+            table,
+            column
+        ).firstOrNull() ?: return false
+        return nullable.equals("NO", ignoreCase = true)
+    }
+
+    /** 모든 방이 참여자 행을 갖고 있는지 (레거시 컬럼을 지워도 되는지 판단) */
+    private fun everyRoomHasMember(jdbcTemplate: JdbcTemplate): Boolean {
+        val orphanRooms = jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*) FROM chat_rooms r
+            WHERE NOT EXISTS (SELECT 1 FROM chat_room_members m WHERE m.room_id = r.id)
+            """.trimIndent(),
+            Int::class.java
+        ) ?: 1
+        return orphanRooms == 0
     }
 
     private fun backfillMembers(jdbcTemplate: JdbcTemplate): Int {
