@@ -43,15 +43,18 @@ data class ChatMessage(
     // Gson은 알 수 없는 값/누락 시 null을 넣으므로 nullable로 두고 사용처에서 TEXT로 취급
     val type: String? = null,
     val imageUrl: String? = null,
+    val thumbnailUrl: String? = null,
     val senderProfileImageUrl: String? = null
 ) {
     val isImage: Boolean get() = type == ChatMessageType.IMAGE && imageUrl != null
+    val isVideo: Boolean get() = type == ChatMessageType.VIDEO && imageUrl != null
     val isSystem: Boolean get() = type == ChatMessageType.SYSTEM
 }
 
 object ChatMessageType {
     const val TEXT = "TEXT"
     const val IMAGE = "IMAGE"
+    const val VIDEO = "VIDEO"
     const val SYSTEM = "SYSTEM"
 }
 

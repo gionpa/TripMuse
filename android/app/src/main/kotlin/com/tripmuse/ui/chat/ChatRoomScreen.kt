@@ -29,6 +29,14 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.mutableStateListOf
@@ -204,26 +212,59 @@ class ChatRoomViewModel @Inject constructor(
     }
 
     fun sendPhoto(roomId: Long, context: Context, uri: Uri) {
+        sendAttachment(
+            roomId = roomId,
+            context = context,
+            uri = uri,
+            label = "사진",
+            fileName = "chat_${System.currentTimeMillis()}.jpg",
+            mimeType = "image/*",
+            send = { id, part -> chatRepository.sendImage(id, part) }
+        )
+    }
+
+    fun sendVideo(roomId: Long, context: Context, uri: Uri) {
+        sendAttachment(
+            roomId = roomId,
+            context = context,
+            uri = uri,
+            label = "동영상",
+            // 원본 확장자를 살려 서버가 그대로 저장할 수 있게 한다
+            fileName = "chat_${System.currentTimeMillis()}.${context.videoExtensionOf(uri)}",
+            mimeType = "video/*",
+            send = { id, part -> chatRepository.sendVideo(id, part) }
+        )
+    }
+
+    private fun sendAttachment(
+        roomId: Long,
+        context: Context,
+        uri: Uri,
+        label: String,
+        fileName: String,
+        mimeType: String,
+        send: suspend (Long, MultipartBody.Part) -> Result<ChatMessage>
+    ) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSendingPhoto = true, error = null)
             val part = try {
                 context.contentResolver.openInputStream(uri).use { stream ->
-                    val bytes = stream?.readBytes() ?: error("사진을 읽을 수 없습니다")
+                    val bytes = stream?.readBytes() ?: error("파일을 읽을 수 없습니다")
                     MultipartBody.Part.createFormData(
                         "file",
-                        "chat_${System.currentTimeMillis()}.jpg",
-                        bytes.toRequestBody("image/*".toMediaTypeOrNull())
+                        fileName,
+                        bytes.toRequestBody(mimeType.toMediaTypeOrNull())
                     )
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isSendingPhoto = false,
-                    error = "사진을 읽을 수 없습니다"
+                    error = "${label}을 읽을 수 없습니다"
                 )
                 return@launch
             }
 
-            chatRepository.sendImage(roomId, part)
+            send(roomId, part)
                 .onSuccess { message ->
                     _uiState.value = _uiState.value.copy(isSendingPhoto = false)
                     appendMessages(listOf(message))
@@ -231,7 +272,7 @@ class ChatRoomViewModel @Inject constructor(
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         isSendingPhoto = false,
-                        error = e.message ?: "사진 전송에 실패했습니다"
+                        error = e.message ?: "${label} 전송에 실패했습니다"
                     )
                 }
         }
@@ -322,6 +363,12 @@ class ChatRoomViewModel @Inject constructor(
     }
 }
 
+/** 선택한 동영상의 확장자를 MIME 타입에서 유추한다 (없으면 mp4) */
+private fun Context.videoExtensionOf(uri: Uri): String {
+    val mime = contentResolver.getType(uri) ?: return "mp4"
+    return android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: "mp4"
+}
+
 private sealed class ChatListEntry {
     data class MessageEntry(val message: ChatMessage) : ChatListEntry()
     data class DateEntry(val label: String) : ChatListEntry()
@@ -346,13 +393,21 @@ fun ChatRoomScreen(
     var showInviteSheet by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
 
-    // 시스템 포토피커: 별도 권한 없이 사진 한 장을 고른다
+    // 시스템 포토피커: 별도 권한 없이 사진/동영상 한 개를 고른다
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
             isToolTrayOpen = false
             viewModel.sendPhoto(roomId, context, uri)
+        }
+    }
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            isToolTrayOpen = false
+            viewModel.sendVideo(roomId, context, uri)
         }
     }
 
@@ -588,6 +643,11 @@ fun ChatRoomScreen(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
                 },
+                onPickVideo = {
+                    videoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                    )
+                },
                 isSendingPhoto = uiState.isSendingPhoto
             )
         }
@@ -659,6 +719,12 @@ private fun MessageBubble(
                     imageUrl = message.imageUrl!!,
                     shape = RoundedCornerShape(topStart = 18.dp, topEnd = 4.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
                 )
+            } else if (message.isVideo) {
+                ChatVideoBubble(
+                    videoUrl = message.imageUrl!!,
+                    thumbnailUrl = message.thumbnailUrl,
+                    shape = RoundedCornerShape(topStart = 18.dp, topEnd = 4.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
+                )
             } else {
                 Surface(
                     shape = RoundedCornerShape(topStart = 18.dp, topEnd = 4.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
@@ -726,6 +792,12 @@ private fun MessageBubble(
                 if (message.isImage) {
                     ChatImageBubble(
                         imageUrl = message.imageUrl!!,
+                        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
+                    )
+                } else if (message.isVideo) {
+                    ChatVideoBubble(
+                        videoUrl = message.imageUrl!!,
+                        thumbnailUrl = message.thumbnailUrl,
                         shape = RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
                     )
                 } else {
@@ -1039,8 +1111,12 @@ private fun SystemMessageRow(content: String) {
     }
 }
 
+/** 서버가 주는 상대 경로에 서버 주소를 붙인다 */
+private fun absoluteUrl(url: String): String =
+    if (url.startsWith("/")) ApiModule.BASE_URL.trimEnd('/') + url else url
+
 /**
- * 사진 메시지 말풍선. 서버가 주는 경로는 상대 경로이므로 서버 주소를 붙여 로드한다.
+ * 사진 메시지 말풍선.
  */
 @Composable
 private fun ChatImageBubble(
@@ -1051,7 +1127,7 @@ private fun ChatImageBubble(
     Surface(shape = shape, color = Color.White, shadowElevation = 1.dp) {
         AsyncImage(
             model = ImageRequest.Builder(context)
-                .data(if (imageUrl.startsWith("/")) ApiModule.BASE_URL.trimEnd('/') + imageUrl else imageUrl)
+                .data(absoluteUrl(imageUrl))
                 .crossfade(true)
                 .build(),
             contentDescription = "사진 메시지",
@@ -1060,6 +1136,116 @@ private fun ChatImageBubble(
                 .heightIn(min = 120.dp, max = 260.dp),
             contentScale = ContentScale.Crop
         )
+    }
+}
+
+/**
+ * 동영상 메시지 말풍선. 썸네일 위에 재생 버튼을 얹고, 누르면 재생 화면을 띄운다.
+ * 썸네일 생성이 실패한 경우에도 재생은 되도록 검은 배경 + 재생 버튼으로 대체한다.
+ */
+@Composable
+private fun ChatVideoBubble(
+    videoUrl: String,
+    thumbnailUrl: String?,
+    shape: androidx.compose.ui.graphics.Shape
+) {
+    val context = LocalContext.current
+    var showPlayer by remember { mutableStateOf(false) }
+
+    if (showPlayer) {
+        ChatVideoPlayerDialog(
+            videoUrl = absoluteUrl(videoUrl),
+            onDismiss = { showPlayer = false }
+        )
+    }
+
+    Surface(
+        shape = shape,
+        color = Color.Black,
+        shadowElevation = 1.dp,
+        onClick = { showPlayer = true }
+    ) {
+        Box(
+            modifier = Modifier
+                .width(200.dp)
+                .height(150.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (thumbnailUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(absoluteUrl(thumbnailUrl))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "동영상 메시지",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            Surface(
+                modifier = Modifier.size(44.dp),
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.55f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = "재생",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 전체 화면 동영상 재생 */
+@Composable
+private fun ChatVideoPlayerDialog(
+    videoUrl: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(videoUrl))
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { exoPlayer.release() }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        player = exoPlayer
+                        useController = true
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "닫기", tint = Color.White)
+            }
+        }
     }
 }
 
@@ -1080,6 +1266,7 @@ private fun ChatInputBar(
     isToolTrayOpen: Boolean = false,
     onToggleToolTray: () -> Unit = {},
     onPickPhoto: () -> Unit = {},
+    onPickVideo: () -> Unit = {},
     isSendingPhoto: Boolean = false
 ) {
     Surface(color = Color.White, shadowElevation = 8.dp) {
@@ -1138,6 +1325,7 @@ private fun ChatInputBar(
             AnimatedVisibility(visible = isToolTrayOpen) {
                 ChatToolTray(
                     onPickPhoto = onPickPhoto,
+                    onPickVideo = onPickVideo,
                     isSendingPhoto = isSendingPhoto
                 )
             }
@@ -1148,15 +1336,15 @@ private fun ChatInputBar(
 @Composable
 private fun ChatToolTray(
     onPickPhoto: () -> Unit,
+    onPickVideo: () -> Unit,
     isSendingPhoto: Boolean
 ) {
     val tools = listOf(
         ChatTool("사진", Icons.Default.Photo, TripMuseAccents.Chat.deep, TripMuseAccents.Chat.container, enabled = true),
+        ChatTool("동영상", Icons.Default.Videocam, TripMuseAccents.Chat.deep, TripMuseAccents.Chat.container, enabled = true),
         ChatTool("카메라", Icons.Default.PhotoCamera, Color(0xFF9AA3AF), Color(0xFFF1F3F6), enabled = false),
-        ChatTool("앨범 공유", Icons.Default.Collections, Color(0xFF9AA3AF), Color(0xFFF1F3F6), enabled = false),
-        ChatTool("위치", Icons.Default.LocationOn, Color(0xFF9AA3AF), Color(0xFFF1F3F6), enabled = false)
+        ChatTool("앨범 공유", Icons.Default.Collections, Color(0xFF9AA3AF), Color(0xFFF1F3F6), enabled = false)
     )
-    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -1173,7 +1361,10 @@ private fun ChatToolTray(
                     modifier = Modifier
                         .weight(1f)
                         .clickable(enabled = tool.enabled && !isSendingPhoto) {
-                            if (tool.label == "사진") onPickPhoto()
+                            when (tool.label) {
+                                "사진" -> onPickPhoto()
+                                "동영상" -> onPickVideo()
+                            }
                         },
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -1183,7 +1374,7 @@ private fun ChatToolTray(
                         color = tool.container
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            if (tool.label == "사진" && isSendingPhoto) {
+                            if (tool.enabled && isSendingPhoto) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(22.dp),
                                     strokeWidth = 2.dp,

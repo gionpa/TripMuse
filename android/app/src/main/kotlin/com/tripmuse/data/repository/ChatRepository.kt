@@ -112,6 +112,26 @@ class ChatRepository @Inject constructor(
         }
     }
 
+    suspend fun sendVideo(roomId: Long, part: MultipartBody.Part): Result<ChatMessage> {
+        return try {
+            val response = api.sendChatVideo(roomId, part)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val message = when (response.code()) {
+                    400 -> "동영상 파일만 전송할 수 있습니다"
+                    413 -> "동영상 용량이 너무 큽니다 (최대 100MB)"
+                    else -> "동영상 전송에 실패했습니다"
+                }
+                Result.failure(Exception(message))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(Exception("네트워크 오류: ${e.message}"))
+        }
+    }
+
     suspend fun markTyping(roomId: Long): Result<Unit> {
         return try {
             val response = api.markChatTyping(roomId)

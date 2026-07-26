@@ -276,6 +276,13 @@ interface TripMuseApi {
         @Part file: MultipartBody.Part
     ): Response<ChatMessage>
 
+    @Multipart
+    @POST("chats/{roomId}/messages/video")
+    suspend fun sendChatVideo(
+        @Path("roomId") roomId: Long,
+        @Part file: MultipartBody.Part
+    ): Response<ChatMessage>
+
     @POST("chats/{roomId}/typing")
     suspend fun markChatTyping(
         @Path("roomId") roomId: Long
