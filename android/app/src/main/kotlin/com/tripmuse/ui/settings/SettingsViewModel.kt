@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.tripmuse.data.api.TripMuseApi
 import com.tripmuse.data.model.StorageUsage
 import com.tripmuse.data.presence.NotificationPreferences
+import com.tripmuse.BuildConfig
+import com.tripmuse.data.sound.ChatAlertMode
 import com.tripmuse.data.sound.ChatSound
 import com.tripmuse.data.sound.ChatSoundPlayer
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,8 +23,10 @@ data class SettingsUiState(
     val friendOnlineAlertEnabled: Boolean = true,
     val chatSoundEnabled: Boolean = true,
     val chatSound: ChatSound = ChatSound.DEFAULT,
-    /** 무음 모드면 소리를 골라도 들리지 않으므로 화면에서 알려준다 */
-    val deviceSilent: Boolean = false
+    /** 지금 수신 모드에서 어떻게 알리게 되는지 — 화면에서 미리 알려준다 */
+    val alertMode: ChatAlertMode = ChatAlertMode.SOUND,
+    val versionName: String = BuildConfig.VERSION_NAME,
+    val versionCode: Int = BuildConfig.VERSION_CODE
 )
 
 @HiltViewModel
@@ -75,8 +79,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun refreshSilentMode() {
-        _uiState.value = _uiState.value.copy(deviceSilent = chatSoundPlayer.isDeviceSilent())
+    /** 수신 모드는 화면 밖에서 바뀌므로 돌아올 때마다 다시 읽는다 */
+    fun refreshAlertMode() {
+        _uiState.value = _uiState.value.copy(alertMode = chatSoundPlayer.currentAlertMode())
     }
 
     fun loadStorageUsage() {

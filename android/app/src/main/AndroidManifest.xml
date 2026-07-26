@@ -11,6 +11,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 진동 모드일 때 채팅 수신을 짧은 진동으로 알린다 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".TripMuseApp"

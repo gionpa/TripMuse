@@ -1,5 +1,10 @@
 package com.tripmuse.ui.settings
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,8 +22,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.tripmuse.data.sound.ChatAlertMode
 import com.tripmuse.data.sound.ChatSound
 import com.tripmuse.ui.theme.TripMuseAccents
 
@@ -32,7 +43,29 @@ fun SettingsScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadStorageUsage()
-        viewModel.refreshSilentMode()
+    }
+
+    // 벨소리/진동 전환은 앱 밖에서 일어나므로 화면에 돌아올 때마다 다시 읽는다
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.refreshAlertMode()
+        }
+    }
+
+    // 이 화면을 보는 중에 볼륨 키로 모드를 바꿀 수도 있다. 그때도 안내가 따라가야 한다.
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) = viewModel.refreshAlertMode()
+        }
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        onDispose { context.unregisterReceiver(receiver) }
     }
 
     Scaffold(
@@ -69,7 +102,12 @@ fun SettingsScreen(
                 onChatSoundEnabledChange = { viewModel.setChatSoundEnabled(it) },
                 selectedSound = uiState.chatSound,
                 onSelectSound = { viewModel.selectChatSound(it) },
-                deviceSilent = uiState.deviceSilent
+                alertMode = uiState.alertMode
+            )
+
+            AboutSection(
+                versionName = uiState.versionName,
+                versionCode = uiState.versionCode
             )
         }
     }
@@ -83,7 +121,7 @@ private fun NotificationSection(
     onChatSoundEnabledChange: (Boolean) -> Unit,
     selectedSound: ChatSound,
     onSelectSound: (ChatSound) -> Unit,
-    deviceSilent: Boolean
+    alertMode: ChatAlertMode
 ) {
     Card(
         modifier = Modifier
@@ -133,7 +171,7 @@ private fun NotificationSection(
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = "새 메시지가 오면 소리로 알려줍니다",
+                        text = "새 메시지가 오면 소리나 진동으로 알려줍니다",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -144,10 +182,16 @@ private fun NotificationSection(
                 )
             }
 
-            if (deviceSilent) {
+            // 지금 수신 모드에서 실제로 어떻게 울리는지 미리 알려준다
+            val modeNotice = when (alertMode) {
+                ChatAlertMode.SOUND -> null
+                ChatAlertMode.VIBRATE -> "휴대폰이 진동 모드예요. 소리 대신 짧게 진동으로 알려드려요."
+                ChatAlertMode.NONE -> "휴대폰이 무음 모드예요. 소리도 진동도 울리지 않습니다."
+            }
+            modeNotice?.let { notice ->
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "휴대폰이 무음 모드예요. 소리를 들으려면 벨소리를 켜주세요.",
+                    text = notice,
                     style = MaterialTheme.typography.bodySmall,
                     color = TripMuseAccents.Chat.deep
                 )
@@ -166,6 +210,44 @@ private fun NotificationSection(
                         onClick = { onSelectSound(sound) }
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutSection(
+    versionName: String,
+    versionCode: Int
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "앱 정보",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "버전",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    // 문의를 받을 때 빌드까지 특정할 수 있게 versionCode도 같이 보여준다
+                    text = "$versionName ($versionCode)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
