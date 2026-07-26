@@ -76,7 +76,20 @@ data class ChatMessageListResponse(
     val otherLastReadMessageId: Long = 0,
     val otherTyping: Boolean = false,
     val typingNickname: String? = null,
-    val readCursors: List<ChatReadCursor> = emptyList()
+    val readCursors: List<ChatReadCursor> = emptyList(),
+    val memberStates: List<ChatMemberState> = emptyList()
+)
+
+/** 스테이지 실시간 반영: 참여자별 캐릭터·감정 */
+data class ChatMemberState(
+    val userId: Long,
+    val characterStyle: String? = null,
+    val emotion: String? = null,
+    val emotionAt: Long? = null
+)
+
+data class EmotionRequest(
+    val emotion: String
 )
 
 data class ChatUnreadCountResponse(

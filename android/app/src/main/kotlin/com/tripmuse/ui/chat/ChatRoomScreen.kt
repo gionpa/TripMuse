@@ -70,6 +70,7 @@ import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tripmuse.data.api.ApiModule
+import com.tripmuse.data.model.ChatMemberState
 import com.tripmuse.data.model.ChatMessage
 import com.tripmuse.data.model.ChatRoom
 import com.tripmuse.data.presence.ChatUnreadMonitor
@@ -148,6 +149,7 @@ class ChatRoomViewModel @Inject constructor(
                         readCursors = response.readCursors
                     )
                     markRead(roomId)
+                    applyMemberStates(response.memberStates)
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
@@ -170,6 +172,7 @@ class ChatRoomViewModel @Inject constructor(
                     typingNickname = response.typingNickname,
                     readCursors = response.readCursors.ifEmpty { _uiState.value.readCursors }
                 )
+                applyMemberStates(response.memberStates)
                 if (response.messages.isNotEmpty()) {
                     // 방을 보고 있으면 곧바로 읽음 처리돼서 안읽은 수가 늘지 않는다.
                     // 그래서 탭 배지 쪽 감지에만 맡기지 않고 여기서 직접 소리를 낸다.
@@ -180,6 +183,53 @@ class ChatRoomViewModel @Inject constructor(
                 }
             }
         // 폴링 실패는 조용히 넘어가고 다음 주기에 재시도
+    }
+
+    // 스테이지의 참여자별 진행 중 감정 (내 것 + 폴링으로 받은 남의 것)
+    private val _memberEmotions = MutableStateFlow<Map<Long, Emotion>>(emptyMap())
+    val memberEmotions: StateFlow<Map<Long, Emotion>> = _memberEmotions.asStateFlow()
+    private val playedEmotionAt = mutableMapOf<Long, Long>()
+
+    private fun myId(): Long = _uiState.value.messages.firstOrNull { it.isMine }?.senderId ?: -1L
+
+    /** 감정 표현 — 내 화면에서 바로 재생하고, 서버로 보내 다른 참여자에게 전파한다 */
+    fun expressEmotion(roomId: Long, emotion: Emotion) {
+        val me = myId()
+        if (me > 0) playEmotion(me, emotion)
+        viewModelScope.launch { chatRepository.setEmotion(roomId, emotion.name) }
+    }
+
+    private fun playEmotion(userId: Long, emotion: Emotion) {
+        _memberEmotions.value = _memberEmotions.value + (userId to emotion)
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(2600)
+            _memberEmotions.value = _memberEmotions.value - userId
+        }
+    }
+
+    /** 폴링/입장 응답의 멤버 상태로 캐릭터를 갱신하고, 새로 표현된 감정을 재생한다 */
+    private fun applyMemberStates(states: List<ChatMemberState>) {
+        if (states.isEmpty()) return
+        val me = myId()
+        // 캐릭터 스타일 실시간 반영
+        _uiState.value.room?.let { room ->
+            var changed = false
+            val updated = room.members.map { m ->
+                val s = states.firstOrNull { it.userId == m.id }
+                if (s != null && s.characterStyle != m.characterStyle) { changed = true; m.copy(characterStyle = s.characterStyle) } else m
+            }
+            if (changed) _uiState.value = _uiState.value.copy(room = room.copy(members = updated))
+        }
+        // 남이 표현한 감정만, 같은 감정은 한 번만 재생
+        states.forEach { s ->
+            if (s.userId == me) return@forEach
+            val emo = s.emotion?.let { runCatching { Emotion.valueOf(it) }.getOrNull() } ?: return@forEach
+            val at = s.emotionAt ?: return@forEach
+            if (playedEmotionAt[s.userId] != at) {
+                playedEmotionAt[s.userId] = at
+                playEmotion(s.userId, emo)
+            }
+        }
     }
 
     /** 메타버스 캐릭터 변경 — 서버 저장 후 방 정보를 다시 받아 내 캐릭터를 갱신한다 */
@@ -597,19 +647,18 @@ fun ChatRoomScreen(
             // 상단 초대 영역과 채팅 사이의 2D 메타버스 스테이지 (세로 30%)
             val stageHeight = (LocalConfiguration.current.screenHeightDp * 0.3f).dp
             val myUserId = uiState.messages.firstOrNull { it.isMine }?.senderId ?: -1L
+            val memberEmotions by viewModel.memberEmotions.collectAsState()
             var stageMenu by remember { mutableStateOf<Offset?>(null) }
             var showEmotionMenu by remember { mutableStateOf(false) }
             var showCharPicker by remember { mutableStateOf(false) }
-            var myEmotion by remember { mutableStateOf<Emotion?>(null) }
             Box(modifier = Modifier.fillMaxWidth().height(stageHeight)) {
                 MetaverseStage(
                     members = uiState.room?.members ?: emptyList(),
                     currentUserId = myUserId,
                     latestMessage = uiState.messages.lastOrNull(),
                     stageHeight = stageHeight,
-                    myEmotion = myEmotion,
+                    memberEmotions = memberEmotions,
                     onMyCharacterTap = { off -> stageMenu = off; showEmotionMenu = false },
-                    onEmotionConsumed = { myEmotion = null },
                     modifier = Modifier.fillMaxSize()
                 )
                 stageMenu?.let { off ->
@@ -618,7 +667,7 @@ fun ChatRoomScreen(
                         onDismissRequest = { stageMenu = null; showEmotionMenu = false }
                     ) {
                         if (showEmotionMenu) {
-                            EmotionMenu { emo -> myEmotion = emo; stageMenu = null; showEmotionMenu = false }
+                            EmotionMenu { emo -> viewModel.expressEmotion(roomId, emo); stageMenu = null; showEmotionMenu = false }
                         } else {
                             CharacterContextMenu(
                                 onCharacterChange = { showCharPicker = true; stageMenu = null },

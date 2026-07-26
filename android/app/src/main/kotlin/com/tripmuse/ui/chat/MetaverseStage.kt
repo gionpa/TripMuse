@@ -65,9 +65,8 @@ fun MetaverseStage(
     currentUserId: Long,
     latestMessage: ChatMessage?,
     stageHeight: Dp,
-    myEmotion: Emotion? = null,
+    memberEmotions: Map<Long, Emotion> = emptyMap(),
     onMyCharacterTap: (Offset) -> Unit = {},
-    onEmotionConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val measurer = rememberTextMeasurer()
@@ -98,15 +97,6 @@ fun MetaverseStage(
         jump.animateTo(1f, tween(520))
         delay(2600)
         speech = null
-    }
-
-    // 감정: 선택되면 2.5초간 재생 후 소진 콜백
-    val emoAnim = remember { Animatable(0f) }
-    LaunchedEffect(myEmotion) {
-        if (myEmotion == null) return@LaunchedEffect
-        emoAnim.snapTo(0f)
-        emoAnim.animateTo(1f, tween(2500, easing = LinearEasing))
-        onEmotionConsumed()
     }
 
     // 캐릭터 배치 계산 (draw와 터치 hit-test가 공유)
@@ -150,7 +140,7 @@ fun MetaverseStage(
             members.forEachIndexed { i, member ->
                 val cx = centerX(i, size.width, marginX)
                 val isMe = member.id == currentUserId
-                val emotion = if (isMe) myEmotion else null
+                val emotion = memberEmotions[member.id]
                 val bob = sin(clock + i * 1.3f) * (charH * 0.02f)
                 val speaking = member.id == speakerId && speech != null
                 val jumpY = if (speaking) sin(jump.value * PI.toFloat()) * (charH * 0.16f) else 0f
@@ -158,7 +148,7 @@ fun MetaverseStage(
                     cx0 = cx, groundY0 = groundY - bob - jumpY, height = charH,
                     style = styleForKey(member.characterStyle, i),
                     speaking = speaking, jump = if (speaking) jump.value else 0f,
-                    emotion = emotion, emoT = emoAnim.value,
+                    emotion = emotion, emoT = clock / (2 * PI.toFloat()),
                     isMe = isMe, name = member.nickname, measurer = measurer
                 )
                 if (speaking) {

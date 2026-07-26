@@ -156,6 +156,18 @@ class ChatRepository @Inject constructor(
         }
     }
 
+    suspend fun setEmotion(roomId: Long, emotion: String): Result<Unit> {
+        return try {
+            val response = api.setChatEmotion(roomId, com.tripmuse.data.model.EmotionRequest(emotion))
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("감정 전송 실패"))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun inviteMembers(roomId: Long, friendIds: List<Long>, shareHistory: Boolean): Result<ChatRoom> {
         return try {
             val response = api.inviteChatMembers(roomId, InviteMembersRequest(friendIds, shareHistory))

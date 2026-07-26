@@ -309,6 +309,12 @@ interface TripMuseApi {
         @Path("roomId") roomId: Long
     ): Response<Unit>
 
+    @POST("chats/{roomId}/emotion")
+    suspend fun setChatEmotion(
+        @Path("roomId") roomId: Long,
+        @Body request: EmotionRequest
+    ): Response<Unit>
+
     @GET("chats/unread-count")
     suspend fun getChatUnreadCount(): Response<ChatUnreadCountResponse>
 
