@@ -15,7 +15,10 @@ server:
   port: 8080
 
 jwt:
-  secret: ${JWT_SECRET:TripMuseLocalDevSecretKeyMustBe32BytesLong}
+  # 기본값을 두지 않는다. 운영에서 JWT_SECRET을 빠뜨리면 기동 자체가 실패하도록 —
+  # 고정 기본키가 배포되면 누구나 토큰을 위조할 수 있다.
+  # (local 프로필에서는 아래에서 개발용 기본값을 덮어쓴다)
+  secret: ${JWT_SECRET}
   access-token-validity-in-seconds: 3600
   refresh-token-validity-in-seconds: 1209600
 
@@ -46,6 +49,10 @@ spring:
     username: tripmuse
     password: tripmuse
     driver-class-name: org.postgresql.Driver
+
+# 로컬 개발 편의를 위한 기본 JWT 키 (운영에는 절대 쓰이지 않는다 — prod는 JWT_SECRET 필수)
+jwt:
+  secret: ${JWT_SECRET:TripMuseLocalDevSecretKeyMustBe32BytesLong}
   jpa:
     hibernate:
       ddl-auto: update

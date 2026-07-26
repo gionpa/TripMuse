@@ -56,48 +56,12 @@ class FileController(
 
         return ResponseEntity.ok()
             .contentType(contentType)
-            .header(HttpHeaders.CACHE_CONTROL, "public, max-age=604800, immutable")
+            // 비공개 앨범 원본이 섞여 나가므로 공유 캐시·CDN에 남지 않게 private으로 준다.
+            // (앨범 권한을 검사하는 mediaId 기반 스트리밍 전환은 다음 단계)
+            .header(HttpHeaders.CACHE_CONTROL, "private, max-age=604800")
             .header(HttpHeaders.ETAG, eTag)
             .lastModified(lastModified)
             .body(resource)
-    }
-
-    @GetMapping("/debug/storage-info")
-    fun getStorageInfo(): ResponseEntity<Map<String, Any>> {
-        val basePath = storageConfig.getBasePath()
-        val baseDir = Paths.get(basePath)
-
-        val info = mutableMapOf<String, Any>(
-            "basePath" to basePath,
-            "storageType" to storageConfig.type,
-            "basePathExists" to Files.exists(baseDir),
-            "basePathIsDirectory" to Files.isDirectory(baseDir)
-        )
-
-        if (Files.exists(baseDir) && Files.isDirectory(baseDir)) {
-            try {
-                val subDirs = listOf("images", "thumbnails", "videos")
-                val dirInfo = mutableMapOf<String, Any>()
-
-                for (subDir in subDirs) {
-                    val subPath = baseDir.resolve(subDir)
-                    if (Files.exists(subPath) && Files.isDirectory(subPath)) {
-                        val fileCount = Files.list(subPath).count()
-                        dirInfo[subDir] = mapOf(
-                            "exists" to true,
-                            "fileCount" to fileCount
-                        )
-                    } else {
-                        dirInfo[subDir] = mapOf("exists" to false)
-                    }
-                }
-                info["directories"] = dirInfo
-            } catch (e: Exception) {
-                info["error"] = e.message ?: "Unknown error"
-            }
-        }
-
-        return ResponseEntity.ok(info)
     }
 
     private fun determineContentType(filePath: String): MediaType {

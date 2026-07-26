@@ -35,11 +35,12 @@ class SecurityConfig(
                     "/api/v1/health",
                     // 로그인 화면에서도 버전 확인이 돌아야 해서 인증 없이 연다
                     "/api/v1/app/version",
-                    "/api/v1/admin/**",
                     "/media/files/**",
                     "/share/**",
                     "/.well-known/**"
                 ).permitAll()
+                    // 관리자 API는 ADMIN 권한 필수 (과거 permitAll이라 무인증 노출됐었다)
+                    .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)

@@ -21,24 +21,17 @@ class JwtAuthenticationFilter(
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
-        // 1. JWT 토큰으로 인증 시도
+        // JWT 토큰만으로 인증한다.
+        // (과거 X-User-Id 헤더 폴백은 헤더 하나로 아무 사용자나 될 수 있어 제거했다.
+        //  토큰이 없거나 위조면 인증 컨텍스트를 비워둔 채 진행하고, 보호된 경로는
+        //  SecurityConfig가 막는다.)
         val token = resolveToken(request)
         if (token != null && jwtTokenProvider.validateToken(token)) {
             val userId = jwtTokenProvider.getUserId(token)
             try {
                 authenticateUser(userId, request)
             } catch (_: Exception) {
-                // 유저가 삭제되었으면 인증하지 않고 진행 (403 반환됨)
-            }
-        } else {
-            // 2. X-User-Id 헤더로 폴백 인증 (기존 앱 호환)
-            val xUserId = request.getHeader("X-User-Id")?.toLongOrNull()
-            if (xUserId != null) {
-                try {
-                    authenticateUser(xUserId, request)
-                } catch (_: Exception) {
-                    // 유저가 없으면 무시하고 진행
-                }
+                // 유저가 삭제되었으면 인증하지 않고 진행
             }
         }
         filterChain.doFilter(request, response)
