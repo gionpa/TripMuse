@@ -212,12 +212,22 @@ fun TripMuseNavHost(
 
                         NavigationBarItem(
                             icon = {
-                                // 읽지 않은 채팅이 있으면 채팅 탭에 레드닷
-                                val showDot = item.screen == Screen.ChatList && unreadChatCount > 0
+                                // 읽지 않은 채팅 개수를 채팅 탭 배지로 표시
+                                val unreadOnThisTab =
+                                    if (item.screen == Screen.ChatList) unreadChatCount else 0L
                                 BadgedBox(
                                     badge = {
-                                        if (showDot) {
-                                            Badge(containerColor = Color(0xFFFF3B30))
+                                        if (unreadOnThisTab > 0) {
+                                            Badge(
+                                                containerColor = Color(0xFFFF3B30),
+                                                contentColor = Color.White
+                                            ) {
+                                                Text(
+                                                    text = if (unreadOnThisTab > 99) "99+" else unreadOnThisTab.toString(),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
                                         }
                                     }
                                 ) {

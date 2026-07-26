@@ -63,6 +63,8 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 presenceMonitor.startHeartbeat(this)
+                // 폴링 주기를 기다리지 않고 복귀 즉시 탭 배지를 맞춘다
+                chatUnreadMonitor.refreshNow()
                 try {
                     awaitCancellation()
                 } finally {

@@ -13,11 +13,13 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private const val POLL_INTERVAL_MS = 20_000L
+private const val POLL_INTERVAL_MS = 10_000L
 
 /**
- * 하단 채팅 탭의 안읽음 표시(레드닷)를 위한 총합 감시.
- * 읽음 처리 직후에는 폴링 주기를 기다리지 않고 refreshNow()로 즉시 반영한다.
+ * 하단 채팅 탭 배지에 표시할 안읽은 메시지 총합.
+ *
+ * 채팅 목록 화면도 같은 값을 쓰도록 updateCount()로 밀어넣어, 목록의 방별 개수와
+ * 탭 배지가 서로 다른 숫자를 보여주지 않게 한다.
  */
 @Singleton
 class ChatUnreadMonitor @Inject constructor(
@@ -43,6 +45,13 @@ class ChatUnreadMonitor @Inject constructor(
 
     fun refreshNow() {
         scope?.launch { refresh() }
+    }
+
+    /**
+     * 이미 방 목록을 받아온 화면이 계산한 총합을 그대로 반영한다 (중복 호출 없이 즉시 일치).
+     */
+    fun updateCount(count: Long) {
+        _totalUnread.value = count
     }
 
     fun reset() {

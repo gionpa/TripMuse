@@ -31,9 +31,11 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.ChatRoom
+import com.tripmuse.data.presence.ChatUnreadMonitor
 import com.tripmuse.data.repository.ChatRepository
 import com.tripmuse.ui.theme.TripMuseAccents
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,7 +50,8 @@ data class ChatListUiState(
 
 @HiltViewModel
 class ChatListViewModel @Inject constructor(
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val chatUnreadMonitor: ChatUnreadMonitor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatListUiState())
@@ -62,10 +65,20 @@ class ChatListViewModel @Inject constructor(
             chatRepository.getRooms()
                 .onSuccess { response ->
                     _uiState.value = _uiState.value.copy(isLoading = false, rooms = response.rooms, error = null)
+                    // 목록에 보이는 개수와 탭 배지가 어긋나지 않도록 같은 값을 공유한다
+                    chatUnreadMonitor.updateCount(response.rooms.sumOf { it.unreadCount })
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
                 }
+        }
+    }
+
+    /** 목록 화면을 보고 있는 동안 새 메시지가 도착하면 바로 반영한다 */
+    suspend fun pollRooms() {
+        chatRepository.getRooms().onSuccess { response ->
+            _uiState.value = _uiState.value.copy(rooms = response.rooms, error = null)
+            chatUnreadMonitor.updateCount(response.rooms.sumOf { it.unreadCount })
         }
     }
 }
@@ -79,10 +92,14 @@ fun ChatListScreen(
     val uiState by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // 탭 진입/복귀 시 목록 갱신 (안읽음 수, 새 메시지 미리보기 반영)
+    // 탭 진입/복귀 시 목록 갱신 + 화면을 보고 있는 동안 주기적으로 새 메시지 반영
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.loadRooms(showLoading = uiState.rooms.isEmpty())
+            while (true) {
+                delay(10_000)
+                viewModel.pollRooms()
+            }
         }
     }
 
