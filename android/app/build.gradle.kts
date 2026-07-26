@@ -36,12 +36,17 @@ android {
         buildConfigField("String", "NAVER_MAPS_CLIENT_ID", "\"$naverMapsClientId\"")
     }
 
+    // 서명 값은 ~/.gradle/gradle.properties(또는 CI secret)에서 주입한다.
+    // 값이 없으면 release 서명만 건너뛰고 debug 빌드는 정상 동작한다.
+    val releaseStoreFile = (findProperty("RELEASE_STORE_FILE") as String?)?.let { file(it) }
     signingConfigs {
         create("release") {
-            storeFile = file(project.property("RELEASE_STORE_FILE") as String)
-            storePassword = project.property("RELEASE_STORE_PASSWORD") as String
-            keyAlias = project.property("RELEASE_KEY_ALIAS") as String
-            keyPassword = project.property("RELEASE_KEY_PASSWORD") as String
+            if (releaseStoreFile != null) {
+                storeFile = releaseStoreFile
+                storePassword = findProperty("RELEASE_STORE_PASSWORD") as String?
+                keyAlias = findProperty("RELEASE_KEY_ALIAS") as String?
+                keyPassword = findProperty("RELEASE_KEY_PASSWORD") as String?
+            }
         }
     }
 
@@ -56,7 +61,10 @@ android {
                 "proguard-rules.pro"
             )
             buildConfigField("String", "BASE_URL", "\"https://tripmuse-production.up.railway.app/api/v1/\"")
-            signingConfig = signingConfigs.getByName("release")
+            // 서명 값이 주입된 경우에만 release 서명을 적용한다 (없으면 unsigned로 빌드)
+            if (releaseStoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
