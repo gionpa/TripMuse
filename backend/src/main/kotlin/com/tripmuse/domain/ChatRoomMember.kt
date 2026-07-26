@@ -12,7 +12,9 @@ import java.time.LocalDateTime
     uniqueConstraints = [UniqueConstraint(name = "uk_chat_room_member", columnNames = ["room_id", "user_id"])],
     indexes = [
         Index(name = "idx_chat_room_members_user", columnList = "user_id"),
-        Index(name = "idx_chat_room_members_room", columnList = "room_id")
+        Index(name = "idx_chat_room_members_room", columnList = "room_id"),
+        // 안읽음 집계는 "내 활성 멤버십"을 방과 조인하므로 user_id, active, room_id로 커버한다
+        Index(name = "idx_chat_room_members_user_active_room", columnList = "user_id, active, room_id")
     ]
 )
 class ChatRoomMember(

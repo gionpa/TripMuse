@@ -9,7 +9,9 @@ import java.time.LocalDate
     name = "albums",
     indexes = [
         Index(name = "idx_albums_user_id", columnList = "user_id"),
-        Index(name = "idx_albums_created_at", columnList = "created_at DESC")
+        Index(name = "idx_albums_created_at", columnList = "created_at DESC"),
+        // 목록은 user_id로 걸러 display_order로 정렬하므로 복합 인덱스로 정렬 비용을 없앤다
+        Index(name = "idx_albums_user_display", columnList = "user_id, display_order")
     ]
 )
 class Album(

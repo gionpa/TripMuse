@@ -26,6 +26,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-cache")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    // 지오코딩 인메모리 캐시 (크기/TTL 제한)
+    implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
     implementation("org.springframework.boot:spring-boot-starter-security") // Added
     implementation("org.springframework.boot:spring-boot-starter-webflux") // Added for WebClient
 

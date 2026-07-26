@@ -69,23 +69,26 @@ class ChatService(
         val rooms = chatRoomRepository.findAllByMember(userId)
         if (rooms.isEmpty()) return ChatRoomListResponse(emptyList())
 
+        val roomIds = rooms.map { it.id }
         val membersByRoom = chatRoomMemberRepository
-            .findByRoomIdInAndActiveTrue(rooms.map { it.id })
+            .findByRoomIdInAndActiveTrue(roomIds)
             .groupBy { it.room.id }
+
+        // 방마다 count 쿼리를 돌리지 않고, 방별 안읽음 수를 한 쿼리로 받아 map으로 쓴다
+        val unreadByRoom = chatMessageRepository.countUnreadByRoom(userId, roomIds)
+            .associate { (it[0] as Long) to (it[1] as Long) }
 
         return ChatRoomListResponse(
             rooms.map { room ->
-                toRoomResponse(room, userId, membersByRoom[room.id] ?: emptyList())
+                toRoomResponse(room, userId, membersByRoom[room.id] ?: emptyList(), unreadByRoom[room.id] ?: 0L)
             }
         )
     }
 
     @Transactional(readOnly = true)
     fun getTotalUnreadCount(userId: Long): Long {
-        return chatRoomRepository.findAllByMember(userId).sumOf { room ->
-            val member = chatRoomMemberRepository.findByRoomIdAndUserId(room.id, userId)
-            if (member == null) 0L else unreadCountOf(room.id, member)
-        }
+        // 방마다 세지 않고 모든 방을 통틀어 한 쿼리로 합계를 낸다
+        return chatMessageRepository.countTotalUnread(userId)
     }
 
     @Transactional(readOnly = true)
@@ -365,7 +368,9 @@ class ChatService(
     private fun toRoomResponse(
         room: ChatRoom,
         userId: Long,
-        preloadedMembers: List<ChatRoomMember>? = null
+        preloadedMembers: List<ChatRoomMember>? = null,
+        // 이미 배치로 계산해둔 안읽음 수가 있으면 그것을 쓰고, 없으면 방 단위로 센다
+        preloadedUnread: Long? = null
     ): ChatRoomResponse {
         val members = preloadedMembers ?: chatRoomMemberRepository.findByRoomIdAndActiveTrue(room.id)
         val me = members.firstOrNull { it.user.id == userId }
@@ -386,7 +391,7 @@ class ChatService(
             memberCount = members.size,
             lastMessage = room.lastMessagePreview,
             lastMessageAt = room.lastMessageAt,
-            unreadCount = me?.let { unreadCountOf(room.id, it) } ?: 0
+            unreadCount = preloadedUnread ?: me?.let { unreadCountOf(room.id, it) } ?: 0
         )
     }
 }

@@ -87,21 +87,9 @@ class MediaService(
     private fun getUnreadCommentStatusBatch(mediaIds: List<Long>, userId: Long): Map<Long, Boolean> {
         if (mediaIds.isEmpty()) return emptyMap()
 
-        val readRecords = commentReadRepository.findByUserIdAndMediaIdIn(userId, mediaIds)
-        val readMap = readRecords.associateBy { it.media.id }
-
-        val result = mutableMapOf<Long, Boolean>()
-        for (mediaId in mediaIds) {
-            val readRecord = readMap[mediaId]
-            val hasUnread = if (readRecord != null) {
-                commentReadRepository.countUnreadComments(mediaId, userId, readRecord.lastReadAt) > 0
-            } else {
-                commentReadRepository.countOtherUsersComments(mediaId, userId) > 0
-            }
-            result[mediaId] = hasUnread
-        }
-
-        return result
+        // 미디어마다 count를 돌리지 않고, 안읽음이 있는 미디어 id를 한 쿼리로 받는다
+        val unreadIds = commentReadRepository.findMediaIdsWithUnreadComments(userId, mediaIds).toSet()
+        return mediaIds.associateWith { it in unreadIds }
     }
 
     @Cacheable(

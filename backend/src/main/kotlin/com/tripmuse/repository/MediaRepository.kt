@@ -2,6 +2,7 @@ package com.tripmuse.repository
 
 import com.tripmuse.domain.Media
 import com.tripmuse.domain.MediaType
+import org.springframework.data.jpa.repository.EntityGraph
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.domain.Page
@@ -19,7 +20,12 @@ interface MediaRepository : JpaRepository<Media, Long> {
     @Query("SELECT m FROM Media m JOIN FETCH m.album WHERE m.album.id = :albumId AND m.type = :type ORDER BY m.takenAt DESC")
     fun findByAlbumIdAndTypeWithAlbumOrderByTakenAtDesc(albumId: Long, type: MediaType): List<Media>
 
+    // memo는 OneToOne이라 기본 EAGER — 목록에서 미디어마다 개별 조회되던 것을
+    // EntityGraph로 함께 로딩해 N+1을 없앤다 (OneToOne이라 페이징에 안전)
+    @EntityGraph(attributePaths = ["memo"])
     fun findByAlbumIdOrderByTakenAtDesc(albumId: Long, pageable: Pageable): Page<Media>
+
+    @EntityGraph(attributePaths = ["memo"])
     fun findByAlbumIdAndTypeOrderByTakenAtDesc(albumId: Long, type: MediaType, pageable: Pageable): Page<Media>
 
     @Query("SELECT m FROM Media m JOIN FETCH m.album WHERE m.id = :mediaId")
