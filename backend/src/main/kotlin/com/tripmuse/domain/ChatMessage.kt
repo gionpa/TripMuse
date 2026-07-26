@@ -33,5 +33,8 @@ class ChatMessage(
 
 enum class ChatMessageType {
     TEXT,
-    IMAGE
+    IMAGE,
+
+    /** 입장·퇴장 안내처럼 시스템이 남기는 메시지 (가운데 정렬로 표시) */
+    SYSTEM
 }

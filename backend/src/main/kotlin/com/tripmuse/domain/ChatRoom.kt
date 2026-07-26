@@ -3,71 +3,40 @@ package com.tripmuse.domain
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
+enum class ChatRoomType {
+    DIRECT,
+    GROUP
+}
+
 /**
- * 1:1 채팅방. user1.id < user2.id로 정규화해 쌍당 한 방만 존재한다.
+ * 채팅방. 참여자는 ChatRoomMember로 관리하므로 1:1과 그룹을 같은 구조로 다룬다.
+ *
+ * 1:1 방에 친구를 초대하면 이 방이 GROUP으로 전환된다(대화 이력은 그대로 남는다).
+ * 그 뒤 같은 두 사람이 1:1 채팅을 시작하면 새 DIRECT 방이 따로 생긴다.
+ *
  * lastMessage* 는 방 목록 정렬/미리보기용 비정규화 필드.
  */
 @Entity
-@Table(
-    name = "chat_rooms",
-    uniqueConstraints = [UniqueConstraint(name = "uk_chat_room_pair", columnNames = ["user1_id", "user2_id"])],
-    indexes = [
-        Index(name = "idx_chat_rooms_user1", columnList = "user1_id"),
-        Index(name = "idx_chat_rooms_user2", columnList = "user2_id")
-    ]
-)
+@Table(name = "chat_rooms")
 class ChatRoom(
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user1_id", nullable = false)
-    val user1: User,
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = true, length = 20)
+    @org.hibernate.annotations.ColumnDefault("'DIRECT'")
+    var type: ChatRoomType? = ChatRoomType.DIRECT,
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user2_id", nullable = false)
-    val user2: User,
+    /** 사용자가 정한 방 이름. null이면 참여자 닉네임을 조합해 보여준다 */
+    @Column(length = 200)
+    var title: String? = null,
 
     var lastMessageAt: LocalDateTime? = null,
 
     @Column(length = 300)
-    var lastMessagePreview: String? = null,
-
-    @Column(nullable = false)
-    var user1LastReadMessageId: Long = 0,
-
-    @Column(nullable = false)
-    var user2LastReadMessageId: Long = 0,
-
-    var user1TypingAt: LocalDateTime? = null,
-
-    var user2TypingAt: LocalDateTime? = null
+    var lastMessagePreview: String? = null
 ) : BaseEntity() {
 
-    fun isMember(userId: Long): Boolean = user1.id == userId || user2.id == userId
+    val isGroup: Boolean get() = type == ChatRoomType.GROUP
 
-    fun otherUser(userId: Long): User = if (user1.id == userId) user2 else user1
-
-    fun lastReadMessageIdOf(userId: Long): Long =
-        if (user1.id == userId) user1LastReadMessageId else user2LastReadMessageId
-
-    fun updateLastRead(userId: Long, messageId: Long) {
-        if (user1.id == userId) {
-            if (messageId > user1LastReadMessageId) user1LastReadMessageId = messageId
-        } else {
-            if (messageId > user2LastReadMessageId) user2LastReadMessageId = messageId
-        }
-    }
-
-    fun markTyping(userId: Long) {
-        val now = LocalDateTime.now()
-        if (user1.id == userId) user1TypingAt = now else user2TypingAt = now
-    }
-
-    fun isTyping(userId: Long): Boolean {
-        val typingAt = if (user1.id == userId) user1TypingAt else user2TypingAt
-        return typingAt != null && typingAt.isAfter(LocalDateTime.now().minus(TYPING_TTL))
-    }
-
-    companion object {
-        /** 클라이언트가 입력 중 신호를 2~3초마다 보내므로 그보다 여유 있게 잡는다 */
-        val TYPING_TTL: java.time.Duration = java.time.Duration.ofSeconds(6)
+    fun convertToGroup() {
+        type = ChatRoomType.GROUP
     }
 }

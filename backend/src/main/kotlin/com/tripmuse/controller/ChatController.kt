@@ -6,6 +6,7 @@ import com.tripmuse.dto.ChatRoomListResponse
 import com.tripmuse.dto.ChatRoomResponse
 import com.tripmuse.dto.ChatUnreadCountResponse
 import com.tripmuse.dto.CreateChatRoomRequest
+import com.tripmuse.dto.InviteMembersRequest
 import com.tripmuse.dto.SendMessageRequest
 import com.tripmuse.security.CustomUserDetails
 import com.tripmuse.service.ChatService
@@ -80,6 +81,24 @@ class ChatController(
     ): ResponseEntity<ChatMessageResponse> {
         val message = chatService.sendImageMessage(roomId, user.id, file)
         return ResponseEntity.status(HttpStatus.CREATED).body(message)
+    }
+
+    @PostMapping("/{roomId}/members")
+    fun inviteMembers(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable roomId: Long,
+        @Valid @RequestBody request: InviteMembersRequest
+    ): ResponseEntity<ChatRoomResponse> {
+        return ResponseEntity.ok(chatService.inviteMembers(roomId, user.id, request))
+    }
+
+    @DeleteMapping("/{roomId}/members/me")
+    fun leaveRoom(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable roomId: Long
+    ): ResponseEntity<Void> {
+        chatService.leaveRoom(roomId, user.id)
+        return ResponseEntity.noContent().build()
     }
 
     @PostMapping("/{roomId}/typing")
