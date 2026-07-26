@@ -68,6 +68,7 @@ import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.ChatMessage
 import com.tripmuse.data.model.ChatRoom
 import com.tripmuse.data.presence.ChatUnreadMonitor
+import com.tripmuse.data.sound.ChatSoundPlayer
 import com.tripmuse.data.upload.fileSizeOf
 import com.tripmuse.data.upload.multipartFromUri
 import com.tripmuse.data.repository.ChatRepository
@@ -109,7 +110,8 @@ data class ChatRoomUiState(
 class ChatRoomViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val friendRepository: FriendRepository,
-    private val chatUnreadMonitor: ChatUnreadMonitor
+    private val chatUnreadMonitor: ChatUnreadMonitor,
+    private val chatSoundPlayer: ChatSoundPlayer
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatRoomUiState())
@@ -164,8 +166,12 @@ class ChatRoomViewModel @Inject constructor(
                     readCursors = response.readCursors.ifEmpty { _uiState.value.readCursors }
                 )
                 if (response.messages.isNotEmpty()) {
+                    // 방을 보고 있으면 곧바로 읽음 처리돼서 안읽은 수가 늘지 않는다.
+                    // 그래서 탭 배지 쪽 감지에만 맡기지 않고 여기서 직접 소리를 낸다.
+                    val fromOthers = response.messages.any { !it.isMine && !it.isSystem }
                     appendMessages(response.messages)
                     markRead(roomId)
+                    if (fromOthers) chatSoundPlayer.playIncoming()
                 }
             }
         // 폴링 실패는 조용히 넘어가고 다음 주기에 재시도

@@ -7,15 +7,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.tripmuse.data.sound.ChatSound
+import com.tripmuse.ui.theme.TripMuseAccents
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,6 +32,7 @@ fun SettingsScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadStorageUsage()
+        viewModel.refreshSilentMode()
     }
 
     Scaffold(
@@ -58,7 +64,12 @@ fun SettingsScreen(
 
             NotificationSection(
                 friendOnlineAlertEnabled = uiState.friendOnlineAlertEnabled,
-                onFriendOnlineAlertChange = { viewModel.setFriendOnlineAlertEnabled(it) }
+                onFriendOnlineAlertChange = { viewModel.setFriendOnlineAlertEnabled(it) },
+                chatSoundEnabled = uiState.chatSoundEnabled,
+                onChatSoundEnabledChange = { viewModel.setChatSoundEnabled(it) },
+                selectedSound = uiState.chatSound,
+                onSelectSound = { viewModel.selectChatSound(it) },
+                deviceSilent = uiState.deviceSilent
             )
         }
     }
@@ -67,7 +78,12 @@ fun SettingsScreen(
 @Composable
 private fun NotificationSection(
     friendOnlineAlertEnabled: Boolean,
-    onFriendOnlineAlertChange: (Boolean) -> Unit
+    onFriendOnlineAlertChange: (Boolean) -> Unit,
+    chatSoundEnabled: Boolean,
+    onChatSoundEnabledChange: (Boolean) -> Unit,
+    selectedSound: ChatSound,
+    onSelectSound: (ChatSound) -> Unit,
+    deviceSilent: Boolean
 ) {
     Card(
         modifier = Modifier
@@ -100,6 +116,104 @@ private fun NotificationSection(
                 Switch(
                     checked = friendOnlineAlertEnabled,
                     onCheckedChange = onFriendOnlineAlertChange
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "채팅 수신음",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "새 메시지가 오면 소리로 알려줍니다",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = chatSoundEnabled,
+                    onCheckedChange = onChatSoundEnabledChange
+                )
+            }
+
+            if (deviceSilent) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "휴대폰이 무음 모드예요. 소리를 들으려면 벨소리를 켜주세요.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TripMuseAccents.Chat.deep
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                // 꺼져 있어도 미리듣기는 되지만, 지금은 울리지 않는다는 걸 흐리게 표시한다
+                modifier = Modifier.alpha(if (chatSoundEnabled) 1f else 0.45f)
+            ) {
+                ChatSound.entries.forEach { sound ->
+                    ChatSoundRow(
+                        sound = sound,
+                        selected = sound == selectedSound,
+                        onClick = { onSelectSound(sound) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatSoundRow(
+    sound: ChatSound,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val accent = TripMuseAccents.Chat
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) accent.container else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = null,
+                tint = if (selected) accent.deep else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = sound.label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (selected) accent.deep else MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = sound.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "선택됨",
+                    tint = accent.deep,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
