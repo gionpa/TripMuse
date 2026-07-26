@@ -7,6 +7,7 @@ import com.tripmuse.data.model.ChatRoom
 import com.tripmuse.data.model.ChatRoomListResponse
 import com.tripmuse.data.model.CreateChatRoomRequest
 import com.tripmuse.data.model.SendMessageRequest
+import okhttp3.MultipartBody
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -82,6 +83,26 @@ class ChatRepository @Inject constructor(
                 Result.success(response.body()!!)
             } else {
                 Result.failure(Exception("메시지 전송에 실패했습니다"))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(Exception("네트워크 오류: ${e.message}"))
+        }
+    }
+
+    suspend fun sendImage(roomId: Long, part: MultipartBody.Part): Result<ChatMessage> {
+        return try {
+            val response = api.sendChatImage(roomId, part)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val message = when (response.code()) {
+                    400 -> "이미지 파일만 전송할 수 있습니다"
+                    413 -> "사진 용량이 너무 큽니다"
+                    else -> "사진 전송에 실패했습니다"
+                }
+                Result.failure(Exception(message))
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

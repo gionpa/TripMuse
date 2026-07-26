@@ -1,11 +1,18 @@
 package com.tripmuse.ui.chat
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,12 +22,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -42,6 +56,9 @@ import com.tripmuse.ui.theme.TripMuseAccents
 import androidx.compose.ui.text.font.FontWeight
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,7 +75,8 @@ data class ChatRoomUiState(
     val error: String? = null,
     /** 상대가 읽은 마지막 메시지 ID — 이보다 큰 내 메시지에 안읽음 숫자를 표시한다 */
     val otherLastReadMessageId: Long = 0,
-    val otherTyping: Boolean = false
+    val otherTyping: Boolean = false,
+    val isSendingPhoto: Boolean = false
 )
 
 @HiltViewModel
@@ -164,6 +182,40 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
+    fun sendPhoto(roomId: Long, context: Context, uri: Uri) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSendingPhoto = true, error = null)
+            val part = try {
+                context.contentResolver.openInputStream(uri).use { stream ->
+                    val bytes = stream?.readBytes() ?: error("사진을 읽을 수 없습니다")
+                    MultipartBody.Part.createFormData(
+                        "file",
+                        "chat_${System.currentTimeMillis()}.jpg",
+                        bytes.toRequestBody("image/*".toMediaTypeOrNull())
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isSendingPhoto = false,
+                    error = "사진을 읽을 수 없습니다"
+                )
+                return@launch
+            }
+
+            chatRepository.sendImage(roomId, part)
+                .onSuccess { message ->
+                    _uiState.value = _uiState.value.copy(isSendingPhoto = false)
+                    appendMessages(listOf(message))
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isSendingPhoto = false,
+                        error = e.message ?: "사진 전송에 실패했습니다"
+                    )
+                }
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
@@ -202,7 +254,19 @@ fun ChatRoomScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
     var inputText by remember { mutableStateOf("") }
+    var isToolTrayOpen by remember { mutableStateOf(false) }
+
+    // 시스템 포토피커: 별도 권한 없이 사진 한 장을 고른다
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            isToolTrayOpen = false
+            viewModel.sendPhoto(roomId, context, uri)
+        }
+    }
 
     LaunchedEffect(roomId) {
         viewModel.enterRoom(roomId)
@@ -350,7 +414,15 @@ fun ChatRoomScreen(
                         inputText = ""
                         viewModel.sendMessage(roomId, text)
                     }
-                }
+                },
+                isToolTrayOpen = isToolTrayOpen,
+                onToggleToolTray = { isToolTrayOpen = !isToolTrayOpen },
+                onPickPhoto = {
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                isSendingPhoto = uiState.isSendingPhoto
             )
         }
     }
@@ -415,18 +487,25 @@ private fun MessageBubble(
                     color = Color(0xFFA89F8F)
                 )
             }
-            Surface(
-                shape = RoundedCornerShape(topStart = 18.dp, topEnd = 4.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
-                color = TripMuseAccents.Album.accent
-            ) {
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                    modifier = Modifier
-                        .widthIn(max = 280.dp)
-                        .padding(horizontal = 14.dp, vertical = 9.dp)
+            if (message.isImage) {
+                ChatImageBubble(
+                    imageUrl = message.imageUrl!!,
+                    shape = RoundedCornerShape(topStart = 18.dp, topEnd = 4.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
                 )
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(topStart = 18.dp, topEnd = 4.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
+                    color = TripMuseAccents.Album.accent
+                ) {
+                    Text(
+                        text = message.content,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        modifier = Modifier
+                            .widthIn(max = 280.dp)
+                            .padding(horizontal = 14.dp, vertical = 9.dp)
+                    )
+                }
             }
         }
     } else {
@@ -468,19 +547,26 @@ private fun MessageBubble(
             Spacer(modifier = Modifier.width(8.dp))
 
             Row(verticalAlignment = Alignment.Bottom) {
-                Surface(
-                    shape = RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
-                    color = Color.White,
-                    shadowElevation = 1.dp
-                ) {
-                    Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF2E2A24),
-                        modifier = Modifier
-                            .widthIn(max = 260.dp)
-                            .padding(horizontal = 14.dp, vertical = 9.dp)
+                if (message.isImage) {
+                    ChatImageBubble(
+                        imageUrl = message.imageUrl!!,
+                        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
                     )
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp),
+                        color = Color.White,
+                        shadowElevation = 1.dp
+                    ) {
+                        Text(
+                            text = message.content,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF2E2A24),
+                            modifier = Modifier
+                                .widthIn(max = 260.dp)
+                                .padding(horizontal = 14.dp, vertical = 9.dp)
+                        )
+                    }
                 }
                 Text(
                     text = timeText,
@@ -586,20 +672,68 @@ private fun rememberTypingDotAlpha(index: Int): Float {
     return alpha
 }
 
+/**
+ * 사진 메시지 말풍선. 서버가 주는 경로는 상대 경로이므로 서버 주소를 붙여 로드한다.
+ */
+@Composable
+private fun ChatImageBubble(
+    imageUrl: String,
+    shape: androidx.compose.ui.graphics.Shape
+) {
+    val context = LocalContext.current
+    Surface(shape = shape, color = Color.White, shadowElevation = 1.dp) {
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(if (imageUrl.startsWith("/")) ApiModule.BASE_URL.trimEnd('/') + imageUrl else imageUrl)
+                .crossfade(true)
+                .build(),
+            contentDescription = "사진 메시지",
+            modifier = Modifier
+                .width(200.dp)
+                .heightIn(min = 120.dp, max = 260.dp),
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+/** 확장 트레이의 도구 하나 */
+private data class ChatTool(
+    val label: String,
+    val icon: ImageVector,
+    val accent: Color,
+    val container: Color,
+    val enabled: Boolean
+)
+
 @Composable
 private fun ChatInputBar(
     value: String,
     onValueChange: (String) -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    isToolTrayOpen: Boolean = false,
+    onToggleToolTray: () -> Unit = {},
+    onPickPhoto: () -> Unit = {},
+    isSendingPhoto: Boolean = false
 ) {
     Surface(color = Color.White, shadowElevation = 8.dp) {
+        Column(modifier = Modifier.navigationBarsPadding()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-                .navigationBarsPadding(),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.Bottom
         ) {
+            // 확장 버튼: 열려 있으면 X로 바뀐다
+            IconButton(
+                onClick = onToggleToolTray,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(
+                    imageVector = if (isToolTrayOpen) Icons.Default.Close else Icons.Default.Add,
+                    contentDescription = if (isToolTrayOpen) "도구 닫기" else "도구 열기",
+                    tint = if (isToolTrayOpen) TripMuseAccents.Chat.deep else Color(0xFF8A8377)
+                )
+            }
             TextField(
                 value = value,
                 onValueChange = onValueChange,
@@ -630,6 +764,88 @@ private fun ChatInputBar(
                 )
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "전송")
+            }
+        }
+
+            // 확장 트레이: + 버튼을 누르면 펼쳐진다
+            AnimatedVisibility(visible = isToolTrayOpen) {
+                ChatToolTray(
+                    onPickPhoto = onPickPhoto,
+                    isSendingPhoto = isSendingPhoto
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatToolTray(
+    onPickPhoto: () -> Unit,
+    isSendingPhoto: Boolean
+) {
+    val tools = listOf(
+        ChatTool("사진", Icons.Default.Photo, TripMuseAccents.Chat.deep, TripMuseAccents.Chat.container, enabled = true),
+        ChatTool("카메라", Icons.Default.PhotoCamera, Color(0xFF9AA3AF), Color(0xFFF1F3F6), enabled = false),
+        ChatTool("앨범 공유", Icons.Default.Collections, Color(0xFF9AA3AF), Color(0xFFF1F3F6), enabled = false),
+        ChatTool("위치", Icons.Default.LocationOn, Color(0xFF9AA3AF), Color(0xFFF1F3F6), enabled = false)
+    )
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFFBF8F1))
+            .padding(horizontal = 12.dp, vertical = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            tools.forEach { tool ->
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(enabled = tool.enabled && !isSendingPhoto) {
+                            if (tool.label == "사진") onPickPhoto()
+                        },
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Surface(
+                        modifier = Modifier.size(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = tool.container
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (tool.label == "사진" && isSendingPhoto) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.dp,
+                                    color = tool.accent
+                                )
+                            } else {
+                                Icon(
+                                    tool.icon,
+                                    contentDescription = tool.label,
+                                    tint = tool.accent,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = tool.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (tool.enabled) Color(0xFF4B4438) else Color(0xFF9AA3AF)
+                    )
+                    if (!tool.enabled) {
+                        Text(
+                            text = "준비 중",
+                            fontSize = 9.sp,
+                            color = Color(0xFFB4AC9E)
+                        )
+                    }
+                }
             }
         }
     }

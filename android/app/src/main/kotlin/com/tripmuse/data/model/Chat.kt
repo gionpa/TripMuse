@@ -26,8 +26,18 @@ data class ChatMessage(
     val content: String,
     val createdAt: String,
     val isMine: Boolean,
-    val unreadCount: Int = 0
-)
+    val unreadCount: Int = 0,
+    // Gson은 알 수 없는 값/누락 시 null을 넣으므로 nullable로 두고 사용처에서 TEXT로 취급
+    val type: String? = null,
+    val imageUrl: String? = null
+) {
+    val isImage: Boolean get() = type == ChatMessageType.IMAGE && imageUrl != null
+}
+
+object ChatMessageType {
+    const val TEXT = "TEXT"
+    const val IMAGE = "IMAGE"
+}
 
 data class ChatMessageListResponse(
     val messages: List<ChatMessage>,

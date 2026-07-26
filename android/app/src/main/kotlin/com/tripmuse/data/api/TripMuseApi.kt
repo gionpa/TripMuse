@@ -269,6 +269,13 @@ interface TripMuseApi {
         @Path("roomId") roomId: Long
     ): Response<Unit>
 
+    @Multipart
+    @POST("chats/{roomId}/messages/image")
+    suspend fun sendChatImage(
+        @Path("roomId") roomId: Long,
+        @Part file: MultipartBody.Part
+    ): Response<ChatMessage>
+
     @POST("chats/{roomId}/typing")
     suspend fun markChatTyping(
         @Path("roomId") roomId: Long
