@@ -68,6 +68,8 @@ import com.tripmuse.data.api.ApiModule
 import com.tripmuse.data.model.ChatMessage
 import com.tripmuse.data.model.ChatRoom
 import com.tripmuse.data.presence.ChatUnreadMonitor
+import com.tripmuse.data.upload.fileSizeOf
+import com.tripmuse.data.upload.multipartFromUri
 import com.tripmuse.data.repository.ChatRepository
 import com.tripmuse.ui.theme.TripMuseAccents
 import androidx.compose.ui.text.font.FontWeight
@@ -246,16 +248,19 @@ class ChatRoomViewModel @Inject constructor(
         send: suspend (Long, MultipartBody.Part) -> Result<ChatMessage>
     ) {
         viewModelScope.launch {
+            // 서버가 받지 못할 크기는 올리기 전에 알려준다 (100MB 업로드 후 실패보다 낫다)
+            val size = context.fileSizeOf(uri)
+            if (size > MAX_UPLOAD_BYTES) {
+                _uiState.value = _uiState.value.copy(
+                    error = "${label} 용량이 너무 큽니다 (${size / 1024 / 1024}MB · 최대 100MB)"
+                )
+                return@launch
+            }
+
             _uiState.value = _uiState.value.copy(isSendingPhoto = true, error = null)
+            // 파일을 메모리에 올리지 않고 스트리밍한다 (큰 동영상에서 OOM으로 죽던 원인)
             val part = try {
-                context.contentResolver.openInputStream(uri).use { stream ->
-                    val bytes = stream?.readBytes() ?: error("파일을 읽을 수 없습니다")
-                    MultipartBody.Part.createFormData(
-                        "file",
-                        fileName,
-                        bytes.toRequestBody(mimeType.toMediaTypeOrNull())
-                    )
-                }
+                context.multipartFromUri(uri = uri, fileName = fileName, mimeType = mimeType)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isSendingPhoto = false,
@@ -362,6 +367,9 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 }
+
+/** 서버 multipart 제한(100MB)과 맞춘 업로드 상한 */
+private const val MAX_UPLOAD_BYTES = 100L * 1024 * 1024
 
 /** 선택한 동영상의 확장자를 MIME 타입에서 유추한다 (없으면 mp4) */
 private fun Context.videoExtensionOf(uri: Uri): String {

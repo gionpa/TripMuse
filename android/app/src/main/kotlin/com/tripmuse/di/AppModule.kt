@@ -8,12 +8,16 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
+
+/** 이보다 큰 본문은 로그에 남기지 않는다 (메모리에 통째로 올라가는 것을 막기 위해) */
+private const val MAX_LOGGED_BODY_BYTES = 256L * 1024
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -32,11 +36,24 @@ object AppModule {
         authInterceptor: AuthInterceptor,
         tokenRefreshAuthenticator: TokenRefreshAuthenticator
     ): OkHttpClient {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = if (BuildConfig.DEBUG) {
-                HttpLoggingInterceptor.Level.BODY
+        // BODY 로깅은 요청 본문 전체를 메모리에 문자열로 올린다.
+        // 사진·동영상 업로드에서는 그 자체로 OOM이 나므로 헤더까지만 남긴다.
+        val bodyLogger = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
+            else HttpLoggingInterceptor.Level.NONE
+        }
+        val headersOnlyLogger = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.HEADERS
+            else HttpLoggingInterceptor.Level.NONE
+        }
+        val loggingInterceptor = Interceptor { chain ->
+            val body = chain.request().body
+            val isUpload = body != null &&
+                (body.contentType()?.type == "multipart" || body.contentLength() > MAX_LOGGED_BODY_BYTES)
+            if (isUpload) {
+                headersOnlyLogger.intercept(chain)
             } else {
-                HttpLoggingInterceptor.Level.NONE
+                bodyLogger.intercept(chain)
             }
         }
 
