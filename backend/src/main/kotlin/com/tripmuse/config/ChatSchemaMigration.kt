@@ -41,10 +41,33 @@ class ChatSchemaMigration {
             }
         }
 
-        // 4) 레거시 참여자 컬럼 정리.
+        // 4) enum CHECK 제약 갱신.
+        //    Hibernate는 테이블을 만들 때만 CHECK를 생성하므로, enum에 값이 추가되면
+        //    (TEXT/IMAGE → SYSTEM) 기존 제약이 새 값을 거부한다.
+        refreshEnumCheck(jdbcTemplate, "chat_messages", "type", listOf("TEXT", "IMAGE", "SYSTEM"))
+        refreshEnumCheck(jdbcTemplate, "chat_rooms", "type", listOf("DIRECT", "GROUP"))
+
+        // 5) 레거시 참여자 컬럼 정리.
         //    엔티티에서 빠졌으므로 NOT NULL이 남아 있으면 새 방 INSERT가 실패한다.
         //    NULL 허용으로 못 바꾸면, 백필이 끝난 것을 확인한 뒤 컬럼을 제거한다.
         relaxOrDropLegacyColumns(jdbcTemplate)
+    }
+
+    /** enum 컬럼의 CHECK 제약을 현재 값 목록으로 다시 만든다 */
+    private fun refreshEnumCheck(
+        jdbcTemplate: JdbcTemplate,
+        table: String,
+        column: String,
+        values: List<String>
+    ) {
+        if (!columnExists(jdbcTemplate, table, column)) return
+        val constraint = "${table}_${column}_check"
+        val allowed = values.joinToString(", ") { "'$it'" }
+        runQuietly(jdbcTemplate, "ALTER TABLE $table DROP CONSTRAINT IF EXISTS $constraint")
+        runQuietly(
+            jdbcTemplate,
+            "ALTER TABLE $table ADD CONSTRAINT $constraint CHECK ($column IS NULL OR $column IN ($allowed))"
+        )
     }
 
     private fun relaxOrDropLegacyColumns(jdbcTemplate: JdbcTemplate) {
