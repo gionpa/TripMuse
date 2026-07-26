@@ -1,6 +1,7 @@
 package com.tripmuse.service
 
 import com.tripmuse.domain.ChatMessage
+import com.tripmuse.domain.ChatMessageType
 import com.tripmuse.domain.ChatRoom
 import com.tripmuse.domain.FriendshipStatus
 import com.tripmuse.dto.ChatMessageListResponse
@@ -14,7 +15,9 @@ import com.tripmuse.repository.UserRepository
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.server.ResponseStatusException
+import java.util.UUID
 
 private const val MESSAGE_PAGE_SIZE = 50
 
@@ -23,7 +26,8 @@ class ChatService(
     private val chatRoomRepository: ChatRoomRepository,
     private val chatMessageRepository: ChatMessageRepository,
     private val friendshipRepository: FriendshipRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val storageService: StorageService
 ) {
 
     /**
@@ -128,12 +132,52 @@ class ChatService(
 
     @Transactional
     fun sendMessage(roomId: Long, userId: Long, content: String): ChatMessageResponse {
+        return saveMessage(roomId, userId, content.trim(), ChatMessageType.TEXT, null)
+    }
+
+    /**
+     * 사진 메시지 전송. 앨범 업로드와 같은 압축 규칙(최대 2048px, JPEG 85%)을 쓴다.
+     */
+    @Transactional
+    fun sendImageMessage(roomId: Long, userId: Long, file: MultipartFile): ChatMessageResponse {
+        if (file.isEmpty) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "빈 파일은 전송할 수 없습니다")
+        }
+        val contentType = file.contentType ?: ""
+        if (!contentType.startsWith("image/")) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "이미지 파일만 전송할 수 있습니다")
+        }
+        findRoomForMember(roomId, userId)
+
+        val extension = file.originalFilename
+            ?.substringAfterLast('.', "")
+            ?.takeIf { it.isNotBlank() }
+            ?: "jpg"
+        val relativePath = "chat/${UUID.randomUUID()}.$extension"
+        storageService.storeImageBytesAtPath(file.bytes, relativePath)
+
+        return saveMessage(roomId, userId, "사진", ChatMessageType.IMAGE, relativePath)
+    }
+
+    private fun saveMessage(
+        roomId: Long,
+        userId: Long,
+        content: String,
+        type: ChatMessageType,
+        imagePath: String?
+    ): ChatMessageResponse {
         val room = findRoomForMember(roomId, userId)
         val sender = userRepository.findById(userId)
             .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다") }
 
         val message = chatMessageRepository.save(
-            ChatMessage(room = room, sender = sender, content = content.trim())
+            ChatMessage(
+                room = room,
+                sender = sender,
+                content = content,
+                type = type,
+                imagePath = imagePath
+            )
         )
 
         room.lastMessageAt = message.createdAt

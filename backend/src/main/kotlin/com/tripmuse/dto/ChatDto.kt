@@ -1,6 +1,7 @@
 package com.tripmuse.dto
 
 import com.tripmuse.domain.ChatMessage
+import com.tripmuse.domain.ChatMessageType
 import com.tripmuse.domain.ChatRoom
 import com.tripmuse.domain.User
 import jakarta.validation.constraints.NotBlank
@@ -50,7 +51,10 @@ data class ChatMessageResponse(
     val createdAt: LocalDateTime,
     val isMine: Boolean,
     /** 아직 읽지 않은 참여자 수 (1:1이면 0 또는 1). 카카오톡의 말풍선 옆 숫자와 같은 의미 */
-    val unreadCount: Int = 0
+    val unreadCount: Int = 0,
+    val type: ChatMessageType = ChatMessageType.TEXT,
+    /** 이미지 메시지일 때 전체 URL (/media/files/...) */
+    val imageUrl: String? = null
 ) {
     companion object {
         fun from(message: ChatMessage, requestUserId: Long, unreadCount: Int = 0): ChatMessageResponse {
@@ -62,7 +66,9 @@ data class ChatMessageResponse(
                 content = message.content,
                 createdAt = message.createdAt,
                 isMine = message.sender.id == requestUserId,
-                unreadCount = unreadCount
+                unreadCount = unreadCount,
+                type = message.type ?: ChatMessageType.TEXT,
+                imageUrl = message.imagePath?.let { "/media/files/$it" }
             )
         }
     }
