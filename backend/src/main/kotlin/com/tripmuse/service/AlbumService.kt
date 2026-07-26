@@ -9,6 +9,7 @@ import com.tripmuse.dto.response.AlbumDetailResponse
 import com.tripmuse.dto.response.AlbumListResponse
 import com.tripmuse.dto.response.AlbumResponse
 import com.tripmuse.dto.response.ShareLinkResponse
+import com.tripmuse.dto.response.ShareRevokeResponse
 import com.tripmuse.dto.response.ShareResolveResponse
 import com.tripmuse.exception.ForbiddenException
 import com.tripmuse.exception.NotFoundException
@@ -63,8 +64,15 @@ class AlbumService(
         // Use single query for comment count instead of N+1
         val commentCount = commentRepository.countByAlbumId(albumId)
 
+        // 소유자에게 공유 상태를 보여주기 위해 링크로 들어온 사람 수를 함께 센다
+        val sharedViewerCount = if (album.user.id == userId && album.shareToken != null) {
+            shareGrantRepository.countByAlbumId(albumId)
+        } else {
+            0
+        }
+
         // Use @Formula calculated mediaCount
-        return AlbumDetailResponse.from(album, commentCount, userId)
+        return AlbumDetailResponse.from(album, commentCount, userId, sharedViewerCount)
     }
 
     private fun canAccessAlbum(album: Album, userId: Long): Boolean {
@@ -98,13 +106,19 @@ class AlbumService(
     }
 
     /**
-     * 공유 링크 해제 — 링크로 부여된 열람 권한도 함께 회수
+     * 공유 링크 해제 — 링크로 부여된 열람 권한도 함께 회수한다.
+     * 해제할 링크가 없었으면 revoked=false로 알려, 앱이 "해제됨"이라고 잘못 말하지 않게 한다.
      */
     @Transactional
-    fun revokeShareLink(albumId: Long, userId: Long) {
+    fun revokeShareLink(albumId: Long, userId: Long): ShareRevokeResponse {
         val album = findAlbumByIdAndUserId(albumId, userId)
+        if (album.shareToken == null) {
+            return ShareRevokeResponse(revoked = false, revokedViewerCount = 0)
+        }
+        val revokedViewerCount = shareGrantRepository.countByAlbumId(albumId)
         album.shareToken = null
         shareGrantRepository.deleteByAlbumId(albumId)
+        return ShareRevokeResponse(revoked = true, revokedViewerCount = revokedViewerCount)
     }
 
     /**

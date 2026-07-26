@@ -7,6 +7,7 @@ import com.tripmuse.dto.response.AlbumDetailResponse
 import com.tripmuse.dto.response.AlbumListResponse
 import com.tripmuse.dto.response.AlbumResponse
 import com.tripmuse.dto.response.ShareLinkResponse
+import com.tripmuse.dto.response.ShareRevokeResponse
 import com.tripmuse.security.CustomUserDetails
 import com.tripmuse.service.AlbumService
 import jakarta.validation.Valid
@@ -77,9 +78,8 @@ class AlbumController(
     fun revokeShareLink(
         @AuthenticationPrincipal user: CustomUserDetails,
         @PathVariable albumId: Long
-    ): ResponseEntity<Void> {
-        albumService.revokeShareLink(albumId, user.id)
-        return ResponseEntity.noContent().build()
+    ): ResponseEntity<ShareRevokeResponse> {
+        return ResponseEntity.ok(albumService.revokeShareLink(albumId, user.id))
     }
 
     @PutMapping("/reorder")
