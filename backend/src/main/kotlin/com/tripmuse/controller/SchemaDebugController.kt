@@ -16,8 +16,34 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/api/v1/users/me/debug")
 class SchemaDebugController(
-    private val jdbcTemplate: JdbcTemplate
+    private val jdbcTemplate: JdbcTemplate,
+    private val chatService: com.tripmuse.service.ChatService
 ) {
+
+    /** 초대 실패 원인을 보기 위한 임시 프로브. 예외를 그대로 돌려준다 */
+    @org.springframework.web.bind.annotation.PostMapping("/invite-probe/{roomId}")
+    fun inviteProbe(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable roomId: Long,
+        @org.springframework.web.bind.annotation.RequestBody request: com.tripmuse.dto.InviteMembersRequest
+    ): ResponseEntity<Map<String, String>> {
+        return try {
+            chatService.inviteMembers(roomId, user.id, request)
+            ResponseEntity.ok(mapOf("result" to "ok"))
+        } catch (e: Throwable) {
+            var root: Throwable = e
+            while (root.cause != null && root.cause !== root) root = root.cause!!
+            ResponseEntity.ok(
+                mapOf(
+                    "type" to e::class.java.name,
+                    "message" to (e.message ?: ""),
+                    "rootType" to root::class.java.name,
+                    "rootMessage" to (root.message ?: ""),
+                    "frame" to (e.stackTrace.firstOrNull { it.className.startsWith("com.tripmuse") }?.toString() ?: "")
+                )
+            )
+        }
+    }
 
     @GetMapping("/schema/{table}")
     fun tableSchema(
