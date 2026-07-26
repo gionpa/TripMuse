@@ -27,7 +27,16 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import com.tripmuse.data.model.ChatReadCursor
+import com.tripmuse.data.model.Friend
+import com.tripmuse.data.repository.FriendRepository
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -76,12 +85,20 @@ data class ChatRoomUiState(
     /** 상대가 읽은 마지막 메시지 ID — 이보다 큰 내 메시지에 안읽음 숫자를 표시한다 */
     val otherLastReadMessageId: Long = 0,
     val otherTyping: Boolean = false,
-    val isSendingPhoto: Boolean = false
+    val typingNickname: String? = null,
+    val isSendingPhoto: Boolean = false,
+    /** 참여자별 읽음 위치 — 말풍선 옆 숫자를 그룹에서도 정확히 계산한다 */
+    val readCursors: List<ChatReadCursor> = emptyList(),
+    /** 초대 가능한 친구 (이미 참여 중인 사람 제외) */
+    val invitableFriends: List<Friend> = emptyList(),
+    val isInviting: Boolean = false,
+    val infoMessage: String? = null
 )
 
 @HiltViewModel
 class ChatRoomViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
+    private val friendRepository: FriendRepository,
     private val chatUnreadMonitor: ChatUnreadMonitor
 ) : ViewModel() {
 
@@ -109,7 +126,9 @@ class ChatRoomViewModel @Inject constructor(
                         messages = response.messages,
                         hasMore = response.hasMore,
                         otherLastReadMessageId = response.otherLastReadMessageId,
-                        otherTyping = response.otherTyping
+                        otherTyping = response.otherTyping,
+                        typingNickname = response.typingNickname,
+                        readCursors = response.readCursors
                     )
                     markRead(roomId)
                 }
@@ -130,7 +149,9 @@ class ChatRoomViewModel @Inject constructor(
                         response.otherLastReadMessageId,
                         _uiState.value.otherLastReadMessageId
                     ),
-                    otherTyping = response.otherTyping
+                    otherTyping = response.otherTyping,
+                    typingNickname = response.typingNickname,
+                    readCursors = response.readCursors.ifEmpty { _uiState.value.readCursors }
                 )
                 if (response.messages.isNotEmpty()) {
                     appendMessages(response.messages)
@@ -216,8 +237,72 @@ class ChatRoomViewModel @Inject constructor(
         }
     }
 
+    /** 초대 시트를 열 때: 이미 참여 중인 사람을 뺀 친구 목록을 준비한다 */
+    fun loadInvitableFriends() {
+        viewModelScope.launch {
+            val memberIds = _uiState.value.room?.members?.map { it.id }?.toSet() ?: emptySet()
+            friendRepository.getFriends().onSuccess { response ->
+                _uiState.value = _uiState.value.copy(
+                    invitableFriends = response.friends.filter { it.id !in memberIds }
+                )
+            }
+        }
+    }
+
+    fun inviteMembers(roomId: Long, friendIds: List<Long>, shareHistory: Boolean, onDone: () -> Unit) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isInviting = true, error = null)
+            chatRepository.inviteMembers(roomId, friendIds, shareHistory)
+                .onSuccess { room ->
+                    _uiState.value = _uiState.value.copy(
+                        isInviting = false,
+                        room = room,
+                        infoMessage = if (shareHistory) {
+                            "초대했습니다 · 이전 대화를 공개했어요"
+                        } else {
+                            "초대했습니다 · 초대 이후 대화만 보여요"
+                        }
+                    )
+                    // 입장 안내 시스템 메시지를 바로 받아온다
+                    pollNewMessages(roomId)
+                    onDone()
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(isInviting = false, error = e.message)
+                }
+        }
+    }
+
+    fun leaveRoom(roomId: Long, onLeft: () -> Unit) {
+        viewModelScope.launch {
+            chatRepository.leaveRoom(roomId)
+                .onSuccess {
+                    chatUnreadMonitor.refreshNow()
+                    onLeft()
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(error = e.message)
+                }
+        }
+    }
+
+    /** 해당 메시지를 아직 읽지 않은 참여자 수 (그룹에서도 정확) */
+    fun unreadCountFor(message: ChatMessage): Int {
+        val cursors = _uiState.value.readCursors
+        if (cursors.isEmpty()) return message.unreadCount
+        return cursors.count { cursor ->
+            cursor.userId != message.senderId &&
+                message.id > cursor.visibleFromMessageId &&
+                cursor.lastReadMessageId < message.id
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun clearInfoMessage() {
+        _uiState.value = _uiState.value.copy(infoMessage = null)
     }
 
     private fun appendMessages(newMessages: List<ChatMessage>) {
@@ -248,6 +333,7 @@ private sealed class ChatListEntry {
 fun ChatRoomScreen(
     roomId: Long,
     onBackClick: () -> Unit,
+    onLeftRoom: () -> Unit = onBackClick,
     viewModel: ChatRoomViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -257,6 +343,8 @@ fun ChatRoomScreen(
     val context = LocalContext.current
     var inputText by remember { mutableStateOf("") }
     var isToolTrayOpen by remember { mutableStateOf(false) }
+    var showInviteSheet by remember { mutableStateOf(false) }
+    var showLeaveDialog by remember { mutableStateOf(false) }
 
     // 시스템 포토피커: 별도 권한 없이 사진 한 장을 고른다
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -287,6 +375,45 @@ fun ChatRoomScreen(
             snackbarHostState.showSnackbar(it)
             viewModel.clearError()
         }
+    }
+
+    LaunchedEffect(uiState.infoMessage) {
+        uiState.infoMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearInfoMessage()
+        }
+    }
+
+    if (showInviteSheet) {
+        InviteMembersSheet(
+            friends = uiState.invitableFriends,
+            isInviting = uiState.isInviting,
+            onDismiss = { showInviteSheet = false },
+            onInvite = { friendIds, shareHistory ->
+                viewModel.inviteMembers(roomId, friendIds, shareHistory) {
+                    showInviteSheet = false
+                }
+            }
+        )
+    }
+
+    if (showLeaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showLeaveDialog = false },
+            title = { Text("채팅방 나가기") },
+            text = { Text("나가면 이 방의 새 메시지를 받지 않고 목록에서도 사라집니다.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLeaveDialog = false
+                    viewModel.leaveRoom(roomId) { onLeftRoom() }
+                }) {
+                    Text("나가기", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLeaveDialog = false }) { Text("취소") }
+            }
+        )
     }
 
     // 새 메시지 도착/전송, 입력중 표시 등장 시 맨 아래로 스크롤 (reverseLayout이라 index 0이 최신)
@@ -328,10 +455,41 @@ fun ChatRoomScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(uiState.room?.otherUser?.nickname ?: "채팅", fontWeight = FontWeight.SemiBold) },
+                title = {
+                    Column {
+                        Text(
+                            text = uiState.room?.displayTitle ?: "채팅",
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        // 그룹방은 몇 명이 있는지 바로 보이게 한다
+                        if (uiState.room?.isGroup == true) {
+                            Text(
+                                text = "${uiState.room?.memberCount ?: 0}명 참여",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TripMuseAccents.Chat.deep.copy(alpha = 0.75f)
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+                    }
+                },
+                actions = {
+                    // 초대는 '대화 내용'이 아니라 '방'에 대한 동작이라 상단바에 둔다
+                    IconButton(onClick = {
+                        viewModel.loadInvitableFriends()
+                        showInviteSheet = true
+                    }) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = "친구 초대")
+                    }
+                    if (uiState.room?.isGroup == true) {
+                        IconButton(onClick = { showLeaveDialog = true }) {
+                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "채팅방 나가기")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -370,17 +528,25 @@ fun ChatRoomScreen(
                             }
                         ) { entry ->
                             when (entry) {
-                                is ChatListEntry.MessageEntry -> MessageBubble(
-                                    message = entry.message,
-                                    otherUserProfileImageUrl = uiState.room?.otherUser?.profileImageUrl,
-                                    // 상대가 아직 읽지 않은 내 메시지에 숫자를 붙인다
-                                    unreadCount = if (entry.message.isMine &&
-                                        entry.message.id > uiState.otherLastReadMessageId
-                                    ) 1 else 0
-                                )
+                                is ChatListEntry.MessageEntry ->
+                                    if (entry.message.isSystem) {
+                                        SystemMessageRow(entry.message.content)
+                                    } else {
+                                        MessageBubble(
+                                            message = entry.message,
+                                            otherUserProfileImageUrl = entry.message.senderProfileImageUrl
+                                                ?: uiState.room?.otherUser?.profileImageUrl,
+                                            // 아직 읽지 않은 참여자 수 (그룹은 여러 명일 수 있다)
+                                            unreadCount = viewModel.unreadCountFor(entry.message),
+                                            // 그룹에서는 누가 보낸 말인지 이름을 함께 보여준다
+                                            showSenderName = uiState.room?.isGroup == true
+                                        )
+                                    }
                                 is ChatListEntry.DateEntry -> DateSeparator(entry.label)
                                 ChatListEntry.TypingEntry -> TypingIndicator(
-                                    nickname = uiState.room?.otherUser?.nickname ?: "상대방",
+                                    nickname = uiState.typingNickname
+                                        ?: uiState.room?.otherUser?.nickname
+                                        ?: "상대방",
                                     profileImageUrl = uiState.room?.otherUser?.profileImageUrl
                                 )
                             }
@@ -454,7 +620,8 @@ private fun DateSeparator(label: String) {
 private fun MessageBubble(
     message: ChatMessage,
     otherUserProfileImageUrl: String? = null,
-    unreadCount: Int = 0
+    unreadCount: Int = 0,
+    showSenderName: Boolean = false
 ) {
     val context = LocalContext.current
     val timeText = formatMessageTime(message.createdAt)
@@ -546,6 +713,15 @@ private fun MessageBubble(
 
             Spacer(modifier = Modifier.width(8.dp))
 
+            Column {
+                if (showSenderName) {
+                    Text(
+                        text = message.senderNickname,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF8A8377),
+                        modifier = Modifier.padding(start = 4.dp, bottom = 3.dp)
+                    )
+                }
             Row(verticalAlignment = Alignment.Bottom) {
                 if (message.isImage) {
                     ChatImageBubble(
@@ -568,12 +744,24 @@ private fun MessageBubble(
                         )
                     }
                 }
-                Text(
-                    text = timeText,
-                    fontSize = 10.sp,
-                    color = Color(0xFFA89F8F),
-                    modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
-                )
+                Column(horizontalAlignment = Alignment.Start) {
+                    if (unreadCount > 0) {
+                        Text(
+                            text = unreadCount.toString(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TripMuseAccents.Chat.accent,
+                            modifier = Modifier.padding(start = 6.dp)
+                        )
+                    }
+                    Text(
+                        text = timeText,
+                        fontSize = 10.sp,
+                        color = Color(0xFFA89F8F),
+                        modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+                    )
+                }
+            }
             }
         }
     }
@@ -670,6 +858,185 @@ private fun rememberTypingDotAlpha(index: Int): Float {
         label = "dot$index"
     )
     return alpha
+}
+
+/**
+ * 친구 초대 시트. 친구를 고른 뒤 이전 대화 공개 여부를 한 번 더 확인한다.
+ * 공개 여부는 초대 후 되돌릴 수 없으니 각 선택이 어떤 결과인지 문구로 분명히 밝힌다.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InviteMembersSheet(
+    friends: List<Friend>,
+    isInviting: Boolean,
+    onDismiss: () -> Unit,
+    onInvite: (List<Long>, Boolean) -> Unit
+) {
+    val selected = remember { mutableStateListOf<Long>() }
+    var askHistory by remember { mutableStateOf(false) }
+
+    if (askHistory) {
+        AlertDialog(
+            onDismissRequest = { askHistory = false },
+            title = { Text("이전 대화를 공개할까요?") },
+            text = {
+                Text(
+                    "새로 초대된 ${selected.size}명에게 지금까지의 대화를 보여줄지 선택해주세요. " +
+                        "초대 후에는 바꿀 수 없습니다."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        askHistory = false
+                        onInvite(selected.toList(), true)
+                    },
+                    enabled = !isInviting
+                ) {
+                    Text("공개하고 초대")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        askHistory = false
+                        onInvite(selected.toList(), false)
+                    },
+                    enabled = !isInviting
+                ) {
+                    Text("공개 없이 초대")
+                }
+            }
+        )
+    }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Text(
+                text = "친구 초대",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "초대하면 이 대화는 그룹 채팅이 됩니다. 둘만의 채팅방은 나중에 새로 만들 수 있어요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (friends.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "초대할 수 있는 친구가 없습니다",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                    items(friends, key = { it.id }) { friend ->
+                        val checked = friend.id in selected
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (checked) selected.remove(friend.id) else selected.add(friend.id)
+                                }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(40.dp),
+                                shape = CircleShape,
+                                color = TripMuseAccents.Friend.container
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = friend.nickname.take(1),
+                                        fontWeight = FontWeight.Bold,
+                                        color = TripMuseAccents.Friend.deep
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(friend.nickname, style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    friend.email,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = {
+                                    if (checked) selected.remove(friend.id) else selected.add(friend.id)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { askHistory = true },
+                enabled = selected.isNotEmpty() && !isInviting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(25.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = TripMuseAccents.Chat.accent)
+            ) {
+                if (isInviting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text(
+                        text = if (selected.isEmpty()) "친구를 선택해주세요" else "${selected.size}명 초대하기",
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 입장·퇴장 안내. 날짜 구분선과 같은 형태로 가운데 정렬한다 */
+@Composable
+private fun SystemMessageRow(content: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp, horizontal = 24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = Color.White.copy(alpha = 0.75f)
+        ) {
+            Text(
+                text = content,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF8A8377),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
+        }
+    }
 }
 
 /**

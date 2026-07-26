@@ -8,11 +8,24 @@ data class ChatUser(
 
 data class ChatRoom(
     val roomId: Long,
-    val otherUser: ChatUser,
+    val type: String? = null,
+    val title: String? = null,
+    /** 1:1 방의 상대. 그룹이면 null */
+    val otherUser: ChatUser? = null,
+    val members: List<ChatUser> = emptyList(),
+    val memberCount: Int = 2,
     val lastMessage: String?,
     val lastMessageAt: String?,
     val unreadCount: Long
-)
+) {
+    val isGroup: Boolean get() = type == "GROUP"
+
+    /** 표시용 이름. 서버가 계산해 주지만 없으면 참여자로 만든다 */
+    val displayTitle: String
+        get() = title?.takeIf { it.isNotBlank() }
+            ?: otherUser?.nickname
+            ?: members.joinToString(", ") { it.nickname }.ifBlank { "채팅" }
+}
 
 data class ChatRoomListResponse(
     val rooms: List<ChatRoom>
@@ -29,21 +42,37 @@ data class ChatMessage(
     val unreadCount: Int = 0,
     // Gson은 알 수 없는 값/누락 시 null을 넣으므로 nullable로 두고 사용처에서 TEXT로 취급
     val type: String? = null,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    val senderProfileImageUrl: String? = null
 ) {
     val isImage: Boolean get() = type == ChatMessageType.IMAGE && imageUrl != null
+    val isSystem: Boolean get() = type == ChatMessageType.SYSTEM
 }
 
 object ChatMessageType {
     const val TEXT = "TEXT"
     const val IMAGE = "IMAGE"
+    const val SYSTEM = "SYSTEM"
 }
+
+data class ChatReadCursor(
+    val userId: Long,
+    val lastReadMessageId: Long,
+    val visibleFromMessageId: Long
+)
+
+data class InviteMembersRequest(
+    val friendIds: List<Long>,
+    val shareHistory: Boolean
+)
 
 data class ChatMessageListResponse(
     val messages: List<ChatMessage>,
     val hasMore: Boolean,
     val otherLastReadMessageId: Long = 0,
-    val otherTyping: Boolean = false
+    val otherTyping: Boolean = false,
+    val typingNickname: String? = null,
+    val readCursors: List<ChatReadCursor> = emptyList()
 )
 
 data class ChatUnreadCountResponse(

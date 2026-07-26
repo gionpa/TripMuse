@@ -284,6 +284,17 @@ interface TripMuseApi {
     @GET("chats/unread-count")
     suspend fun getChatUnreadCount(): Response<ChatUnreadCountResponse>
 
+    @POST("chats/{roomId}/members")
+    suspend fun inviteChatMembers(
+        @Path("roomId") roomId: Long,
+        @Body request: InviteMembersRequest
+    ): Response<ChatRoom>
+
+    @DELETE("chats/{roomId}/members/me")
+    suspend fun leaveChatRoom(
+        @Path("roomId") roomId: Long
+    ): Response<Unit>
+
     @POST("friends/invitations/{invitationId}/accept")
     suspend fun acceptInvitation(
         @Path("invitationId") invitationId: Long

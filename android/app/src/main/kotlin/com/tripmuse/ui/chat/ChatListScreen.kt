@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -182,11 +183,12 @@ private fun ChatRoomItem(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar
-        if (room.otherUser.profileImageUrl != null) {
+        // Avatar (그룹방은 인원수를 겹쳐 보여준다)
+        val profileImageUrl = room.otherUser?.profileImageUrl
+        if (profileImageUrl != null) {
             AsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data(ApiModule.BASE_URL.trimEnd('/') + room.otherUser.profileImageUrl)
+                    .data(ApiModule.BASE_URL.trimEnd('/') + profileImageUrl)
                     .crossfade(true)
                     .build(),
                 contentDescription = "프로필 이미지",
@@ -202,12 +204,21 @@ private fun ChatRoomItem(
                 color = TripMuseAccents.Chat.container
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = room.otherUser.nickname.take(1),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = TripMuseAccents.Chat.deep
-                    )
+                    if (room.isGroup) {
+                        Icon(
+                            Icons.Default.Groups,
+                            contentDescription = null,
+                            tint = TripMuseAccents.Chat.deep,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    } else {
+                        Text(
+                            text = room.displayTitle.take(1),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TripMuseAccents.Chat.deep
+                        )
+                    }
                 }
             }
         }
@@ -217,12 +228,20 @@ private fun ChatRoomItem(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = room.otherUser.nickname,
+                    text = room.displayTitle,
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (room.isGroup) {
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = room.memberCount.toString(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = formatRoomListTime(room.lastMessageAt),
                     style = MaterialTheme.typography.bodySmall,

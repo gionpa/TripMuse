@@ -6,6 +6,7 @@ import com.tripmuse.data.model.ChatMessageListResponse
 import com.tripmuse.data.model.ChatRoom
 import com.tripmuse.data.model.ChatRoomListResponse
 import com.tripmuse.data.model.CreateChatRoomRequest
+import com.tripmuse.data.model.InviteMembersRequest
 import com.tripmuse.data.model.SendMessageRequest
 import okhttp3.MultipartBody
 import javax.inject.Inject
@@ -120,6 +121,41 @@ class ChatRepository @Inject constructor(
             throw e
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun inviteMembers(roomId: Long, friendIds: List<Long>, shareHistory: Boolean): Result<ChatRoom> {
+        return try {
+            val response = api.inviteChatMembers(roomId, InviteMembersRequest(friendIds, shareHistory))
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                val message = when (response.code()) {
+                    400 -> "초대할 수 있는 친구가 없습니다"
+                    403 -> "친구 관계가 아닌 사용자는 초대할 수 없습니다"
+                    else -> "초대에 실패했습니다"
+                }
+                Result.failure(Exception(message))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(Exception("네트워크 오류: ${e.message}"))
+        }
+    }
+
+    suspend fun leaveRoom(roomId: Long): Result<Unit> {
+        return try {
+            val response = api.leaveChatRoom(roomId)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("채팅방을 나갈 수 없습니다"))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(Exception("네트워크 오류: ${e.message}"))
         }
     }
 
