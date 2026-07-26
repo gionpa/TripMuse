@@ -53,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
@@ -576,6 +577,17 @@ fun ChatRoomScreen(
                 .consumeWindowInsets(paddingValues)
                 .imePadding()
         ) {
+            // 상단 초대 영역과 채팅 사이의 2D 메타버스 스테이지 (세로 30%)
+            val stageHeight = (LocalConfiguration.current.screenHeightDp * 0.3f).dp
+            MetaverseStage(
+                members = uiState.room?.members ?: emptyList(),
+                currentUserId = uiState.messages.firstOrNull { it.isMine }?.senderId ?: -1L,
+                latestMessage = uiState.messages.lastOrNull(),
+                stageHeight = stageHeight,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(stageHeight)
+            )
             Box(modifier = Modifier.weight(1f)) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
