@@ -37,6 +37,7 @@ import javax.inject.Inject
 
 data class FriendLocationUiState(
     val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false,
     val location: FriendLocation? = null,
     val error: String? = null
 )
@@ -49,12 +50,33 @@ class FriendLocationViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(FriendLocationUiState())
     val uiState: StateFlow<FriendLocationUiState> = _uiState.asStateFlow()
 
-    fun load(friendId: Long) {
+    /**
+     * @param isRefresh 이미 지도를 보고 있는 상태에서의 재조회. 지도를 언마운트하지 않기 위해
+     *   전체 로딩과 구분한다 (MapView가 파괴·재생성되면 간헐적으로 빈 지도가 된다).
+     */
+    fun load(friendId: Long, isRefresh: Boolean = false) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(
+                isLoading = !isRefresh,
+                isRefreshing = isRefresh,
+                error = null
+            )
             locationRepository.getFriendLocation(friendId)
-                .onSuccess { _uiState.value = FriendLocationUiState(isLoading = false, location = it) }
-                .onFailure { _uiState.value = FriendLocationUiState(isLoading = false, error = it.message) }
+                .onSuccess {
+                    _uiState.value = FriendLocationUiState(
+                        isLoading = false,
+                        isRefreshing = false,
+                        location = it
+                    )
+                }
+                .onFailure { e ->
+                    // 실패해도 이미 받아둔 위치는 남겨 지도가 사라지지 않게 한다
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        error = e.message
+                    )
+                }
         }
     }
 }
@@ -138,28 +160,10 @@ fun FriendLocationDialog(
                         .fillMaxWidth()
                 ) {
                     val location = uiState.location
+                    // 좌표가 있으면 지도를 먼저 그린다. 새로고침 중이라고 언마운트하면
+                    // MapView가 파괴·재생성되면서 빈 지도가 나올 수 있다.
                     when {
-                        uiState.isLoading -> {
-                            CircularProgressIndicator(
-                                modifier = Modifier.align(Alignment.Center),
-                                color = TripMuseAccents.Friend.accent
-                            )
-                        }
-                        uiState.error != null -> {
-                            EmptyLocationState(
-                                title = uiState.error ?: "위치를 불러올 수 없습니다",
-                                description = "잠시 후 다시 시도해주세요.",
-                                onRetry = { viewModel.load(friendId) }
-                            )
-                        }
-                        location == null || !location.hasLocation -> {
-                            EmptyLocationState(
-                                title = "아직 공유된 위치가 없습니다",
-                                description = "${friendNickname}님이 앱을 열면 위치가 표시됩니다.",
-                                onRetry = { viewModel.load(friendId) }
-                            )
-                        }
-                        else -> {
+                        location != null && location.hasLocation -> {
                             val lat = location.latitude!!
                             val lon = location.longitude!!
                             if (MapRegion.isDomestic(lat, lon)) {
@@ -182,6 +186,26 @@ fun FriendLocationDialog(
                                 OverseasComingSoonState(latitude = lat, longitude = lon)
                             }
                         }
+                        uiState.isLoading -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.align(Alignment.Center),
+                                color = TripMuseAccents.Friend.accent
+                            )
+                        }
+                        uiState.error != null -> {
+                            EmptyLocationState(
+                                title = uiState.error ?: "위치를 불러올 수 없습니다",
+                                description = "잠시 후 다시 시도해주세요.",
+                                onRetry = { viewModel.load(friendId) }
+                            )
+                        }
+                        else -> {
+                            EmptyLocationState(
+                                title = "아직 공유된 위치가 없습니다",
+                                description = "${friendNickname}님이 앱을 열면 위치가 표시됩니다.",
+                                onRetry = { viewModel.load(friendId) }
+                            )
+                        }
                     }
                 }
 
@@ -192,19 +216,41 @@ fun FriendLocationDialog(
                         .padding(horizontal = 20.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val coords = uiState.location?.takeIf { it.hasLocation }?.let {
-                        String.format("%.5f, %.5f", it.latitude, it.longitude)
-                    } ?: "위치 정보 없음"
-                    Text(
-                        text = coords,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = { viewModel.load(friendId) }) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("새로고침")
+                    Column(modifier = Modifier.weight(1f)) {
+                        val coords = uiState.location?.takeIf { it.hasLocation }?.let {
+                            String.format("%.5f, %.5f", it.latitude, it.longitude)
+                        } ?: "위치 정보 없음"
+                        Text(
+                            text = coords,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        // 새로고침이 실패해도 지도는 유지하고, 실패 사실만 알린다
+                        if (uiState.error != null && uiState.location?.hasLocation == true) {
+                            Text(
+                                text = "새로고침 실패 · 이전 위치를 표시하고 있어요",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                    TextButton(
+                        onClick = { viewModel.load(friendId, isRefresh = uiState.location != null) },
+                        enabled = !uiState.isRefreshing && !uiState.isLoading
+                    ) {
+                        if (uiState.isRefreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = TripMuseAccents.Friend.accent
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("갱신 중")
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("새로고침")
+                        }
                     }
                 }
             }
