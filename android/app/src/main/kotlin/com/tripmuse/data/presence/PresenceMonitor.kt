@@ -2,6 +2,9 @@ package com.tripmuse.data.presence
 
 import android.util.Log
 import com.tripmuse.data.auth.TokenManager
+import com.tripmuse.data.notification.AppNotification
+import com.tripmuse.data.notification.NotificationStore
+import com.tripmuse.data.notification.NotificationType
 import com.tripmuse.data.repository.FriendRepository
 import com.tripmuse.data.repository.PresenceRepository
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +38,7 @@ class PresenceMonitor @Inject constructor(
     private val friendRepository: FriendRepository,
     private val notifier: FriendOnlineNotifier,
     private val notificationPreferences: NotificationPreferences,
+    private val notificationStore: NotificationStore,
     private val tokenManager: TokenManager
 ) {
     private var heartbeatJob: Job? = null
@@ -107,7 +111,19 @@ class PresenceMonitor @Inject constructor(
         newlyOnline.forEach { presence ->
             val nickname = friends.firstOrNull { it.id == presence.friendId }?.nickname ?: return@forEach
             Log.d(TAG, "friend came online: $nickname (${presence.friendId})")
+            // 시스템 알림 + 인앱 알림 센터에 함께 남긴다
             notifier.notifyFriendOnline(presence.friendId, nickname)
+            val now = System.currentTimeMillis()
+            notificationStore.add(
+                AppNotification(
+                    id = "friend-online-${presence.friendId}-$now",
+                    type = NotificationType.FRIEND_ONLINE,
+                    title = "${nickname}님이 접속했어요",
+                    body = "지금 TripMuse를 사용 중이에요",
+                    timestamp = now,
+                    friendId = presence.friendId
+                )
+            )
         }
     }
 }

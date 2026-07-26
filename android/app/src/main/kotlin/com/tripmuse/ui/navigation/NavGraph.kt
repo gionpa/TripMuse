@@ -64,6 +64,7 @@ import com.tripmuse.ui.media.MediaDetailScreen
 import com.tripmuse.ui.friend.FriendScreen
 import com.tripmuse.ui.profile.ProfileScreen
 import com.tripmuse.ui.recommendation.RecommendationScreen
+import com.tripmuse.ui.notification.NotificationScreen
 import com.tripmuse.ui.settings.SettingsScreen
 import com.tripmuse.ui.splash.SplashScreen
 
@@ -96,6 +97,7 @@ sealed class Screen(val route: String) {
     object ChatRoom : Screen("chat/{roomId}") {
         fun createRoute(roomId: Long) = "chat/$roomId"
     }
+    object Notifications : Screen("notifications")
 }
 
 data class BottomNavItem(
@@ -333,6 +335,9 @@ fun TripMuseNavHost(
                     },
                     onCreateAlbumClick = {
                         navController.navigate(Screen.AlbumCreate.route)
+                    },
+                    onNotificationsClick = {
+                        navController.navigate(Screen.Notifications.route)
                     }
                 )
             }
@@ -362,6 +367,12 @@ fun TripMuseNavHost(
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onBackClick = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.Notifications.route) {
+                NotificationScreen(
+                    onBack = { navController.popBackStack() }
                 )
             }
 

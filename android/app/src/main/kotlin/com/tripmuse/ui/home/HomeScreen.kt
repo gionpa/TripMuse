@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.TextFieldDefaults
@@ -51,9 +52,11 @@ import kotlin.math.roundToInt
 fun HomeScreen(
     onAlbumClick: (Long) -> Unit,
     onCreateAlbumClick: () -> Unit,
+    onNotificationsClick: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val notificationUnread by viewModel.notificationUnread.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.loadAlbums()
@@ -78,6 +81,16 @@ fun HomeScreen(
                         )
                     },
                     actions = {
+                        IconButton(onClick = onNotificationsClick) {
+                            BadgedBox(
+                                badge = {
+                                    // 안읽은 알림이 있으면 레드닷
+                                    if (notificationUnread > 0) Badge()
+                                }
+                            ) {
+                                Icon(Icons.Default.Notifications, contentDescription = "알림")
+                            }
+                        }
                         IconButton(onClick = { viewModel.toggleSearch() }) {
                             Icon(Icons.Default.Search, contentDescription = "검색")
                         }

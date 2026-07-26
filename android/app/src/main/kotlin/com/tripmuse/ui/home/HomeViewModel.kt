@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tripmuse.data.auth.AuthEventManager
 import com.tripmuse.data.model.Album
+import com.tripmuse.data.notification.NotificationStore
 import com.tripmuse.data.repository.AlbumRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,11 +31,15 @@ enum class AlbumTab {
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val albumRepository: AlbumRepository,
-    private val authEventManager: AuthEventManager
+    private val authEventManager: AuthEventManager,
+    notificationStore: NotificationStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    /** 상단 벨 배지에 쓸 안읽은 알림 수 */
+    val notificationUnread: StateFlow<Int> = notificationStore.unreadCount
 
     // 스크롤 위치 유지를 위한 LazyGridState
     val gridState = LazyGridState()
