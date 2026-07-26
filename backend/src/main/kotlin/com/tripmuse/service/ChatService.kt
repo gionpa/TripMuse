@@ -7,6 +7,7 @@ import com.tripmuse.domain.ChatRoomMember
 import com.tripmuse.domain.ChatRoomType
 import com.tripmuse.domain.FriendshipStatus
 import com.tripmuse.domain.User
+import com.tripmuse.dto.ChatMemberState
 import com.tripmuse.dto.ChatMessageListResponse
 import com.tripmuse.dto.ChatMessageResponse
 import com.tripmuse.dto.ChatReadCursor
@@ -117,6 +118,15 @@ class ChatService(
         val cursors = members.map {
             ChatReadCursor(it.user.id, it.lastReadMessageId, it.visibleFromMessageId)
         }
+        val memberStates = members.map {
+            val emo = it.currentEmotion()
+            ChatMemberState(
+                userId = it.user.id,
+                characterStyle = it.user.characterStyle,
+                emotion = emo,
+                emotionAt = if (emo != null) it.emotionAt?.atZone(java.time.ZoneOffset.UTC)?.toInstant()?.toEpochMilli() else null
+            )
+        }
         // 1:1 호환 필드
         val otherLastRead = if (room.isGroup) 0 else (others.firstOrNull()?.lastReadMessageId ?: 0)
 
@@ -137,7 +147,8 @@ class ChatService(
             otherLastReadMessageId = otherLastRead,
             otherTyping = typingMember != null,
             typingNickname = typingMember?.user?.nickname,
-            readCursors = cursors
+            readCursors = cursors,
+            memberStates = memberStates
         )
     }
 
@@ -145,6 +156,13 @@ class ChatService(
     fun markTyping(roomId: Long, userId: Long) {
         val (_, member) = findRoomAndMember(roomId, userId)
         member.markTyping()
+    }
+
+    /** 메타버스 감정 표현 — 폴링을 통해 방의 다른 참여자에게 전달된다 */
+    @Transactional
+    fun setEmotion(roomId: Long, userId: Long, emotion: String) {
+        val (_, member) = findRoomAndMember(roomId, userId)
+        member.markEmotion(emotion)
     }
 
     @Transactional

@@ -82,6 +82,15 @@ data class ChatReadCursor(
     val visibleFromMessageId: Long
 )
 
+/** 메타버스 스테이지 실시간 반영용: 참여자별 캐릭터 스타일 + 최근 감정 */
+data class ChatMemberState(
+    val userId: Long,
+    val characterStyle: String?,
+    val emotion: String?,
+    /** 감정 발생 시각(epoch millis) — 클라이언트가 같은 감정의 재생을 한 번만 하도록 */
+    val emotionAt: Long?
+)
+
 data class ChatMessageListResponse(
     val messages: List<ChatMessageResponse>,
     val hasMore: Boolean,
@@ -90,11 +99,16 @@ data class ChatMessageListResponse(
     val otherTyping: Boolean = false,
     /** 그룹에서 누가 입력 중인지 표시하기 위한 닉네임 */
     val typingNickname: String? = null,
-    val readCursors: List<ChatReadCursor> = emptyList()
+    val readCursors: List<ChatReadCursor> = emptyList(),
+    val memberStates: List<ChatMemberState> = emptyList()
 )
 
 data class ChatUnreadCountResponse(
     val totalUnread: Long
+)
+
+data class EmotionRequest(
+    val emotion: String
 )
 
 data class CreateChatRoomRequest(

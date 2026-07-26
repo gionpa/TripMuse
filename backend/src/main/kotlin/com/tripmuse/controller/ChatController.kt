@@ -1,5 +1,6 @@
 package com.tripmuse.controller
 
+import com.tripmuse.dto.EmotionRequest
 import com.tripmuse.dto.ChatMessageListResponse
 import com.tripmuse.dto.ChatMessageResponse
 import com.tripmuse.dto.ChatRoomListResponse
@@ -126,6 +127,16 @@ class ChatController(
         @PathVariable roomId: Long
     ): ResponseEntity<Void> {
         chatService.markAsRead(roomId, user.id)
+        return ResponseEntity.noContent().build()
+    }
+
+    @PostMapping("/{roomId}/emotion")
+    fun setEmotion(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @PathVariable roomId: Long,
+        @RequestBody request: EmotionRequest
+    ): ResponseEntity<Void> {
+        chatService.setEmotion(roomId, user.id, request.emotion)
         return ResponseEntity.noContent().build()
     }
 }
