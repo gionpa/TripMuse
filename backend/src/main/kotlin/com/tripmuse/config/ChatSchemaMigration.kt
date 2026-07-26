@@ -39,41 +39,62 @@ class ChatSchemaMigration {
         // 3) type이 비어 있는 기존 방은 1:1로 표시
         runQuietly(jdbcTemplate, "UPDATE chat_rooms SET type = 'DIRECT' WHERE type IS NULL")
 
-        // 4) 참여자 백필 (이미 있는 행은 건너뛴다)
+        // 4) 참여자 백필 + 읽음 위치 보정 (이미 있는 행도 lastRead가 0이면 채운다)
         if (columnExists(jdbcTemplate, "chat_rooms", "user1_id")) {
-            val inserted = backfillMembers(jdbcTemplate)
-            if (inserted > 0) {
-                logger.info("Chat migration: backfilled $inserted chat_room_members rows")
+            val changed = backfillMembers(jdbcTemplate)
+            if (changed > 0) {
+                logger.info("Chat migration: backfilled/updated $changed chat_room_members rows")
             }
         }
     }
 
     private fun backfillMembers(jdbcTemplate: JdbcTemplate): Int {
         var total = 0
-        // user1 / user2 각각을 참여자로 옮기고, 읽음 위치도 함께 가져온다
-        listOf("user1_id" to "user1_last_read_message_id", "user2_id" to "user2_last_read_message_id")
-            .forEach { (userColumn, lastReadColumn) ->
-                val lastRead = if (columnExists(jdbcTemplate, "chat_rooms", lastReadColumn)) {
-                    "COALESCE(r.$lastReadColumn, 0)"
-                } else {
-                    "0"
-                }
+        listOf("user1" to "user1_id", "user2" to "user2_id").forEach { (prefix, userColumn) ->
+            // 레거시 읽음 컬럼 이름은 네이밍 전략에 따라 다를 수 있어 실제 이름을 찾아 쓴다
+            val lastReadColumn = findColumn(jdbcTemplate, "chat_rooms", "$prefix%read%")
+            val lastReadExpr = lastReadColumn?.let { "COALESCE(r.$it, 0)" } ?: "0"
+
+            total += jdbcTemplate.update(
+                """
+                INSERT INTO chat_room_members
+                    (room_id, user_id, last_read_message_id, visible_from_message_id, active, created_at, updated_at)
+                SELECT r.id, r.$userColumn, $lastReadExpr, 0, true, NOW(), NOW()
+                FROM chat_rooms r
+                WHERE r.$userColumn IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM chat_room_members m
+                    WHERE m.room_id = r.id AND m.user_id = r.$userColumn
+                  )
+                """.trimIndent()
+            )
+
+            // 이전 배포에서 0으로 들어간 읽음 위치를 레거시 값으로 되살린다
+            if (lastReadColumn != null) {
                 total += jdbcTemplate.update(
                     """
-                    INSERT INTO chat_room_members
-                        (room_id, user_id, last_read_message_id, visible_from_message_id, active, created_at, updated_at)
-                    SELECT r.id, r.$userColumn, $lastRead, 0, true, NOW(), NOW()
+                    UPDATE chat_room_members m
+                    SET last_read_message_id = r.$lastReadColumn
                     FROM chat_rooms r
-                    WHERE r.$userColumn IS NOT NULL
-                      AND NOT EXISTS (
-                        SELECT 1 FROM chat_room_members m
-                        WHERE m.room_id = r.id AND m.user_id = r.$userColumn
-                      )
+                    WHERE m.room_id = r.id
+                      AND m.user_id = r.$userColumn
+                      AND r.$lastReadColumn IS NOT NULL
+                      AND m.last_read_message_id < r.$lastReadColumn
                     """.trimIndent()
                 )
             }
+        }
         return total
     }
+
+    /** 패턴에 맞는 컬럼 이름을 하나 찾는다 (없으면 null) */
+    private fun findColumn(jdbcTemplate: JdbcTemplate, table: String, pattern: String): String? =
+        jdbcTemplate.queryForList(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND column_name LIKE ?",
+            String::class.java,
+            table,
+            pattern
+        ).firstOrNull()
 
     private fun tableExists(jdbcTemplate: JdbcTemplate, table: String): Boolean =
         jdbcTemplate.queryForObject(
