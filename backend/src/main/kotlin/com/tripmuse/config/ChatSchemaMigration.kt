@@ -48,13 +48,9 @@ class ChatSchemaMigration {
     }
 
     private fun relaxOrDropLegacyColumns(jdbcTemplate: JdbcTemplate) {
-        // 참여자 ID뿐 아니라 읽음 위치 컬럼도 NOT NULL이라 새 방 INSERT를 막는다
-        val legacyColumns = listOf(
-            "user1_id",
-            "user2_id",
-            "user1_last_read_message_id",
-            "user2_last_read_message_id"
-        ).filter { columnExists(jdbcTemplate, "chat_rooms", it) }
+        // 엔티티에서 user1/user2 필드가 사라졌으므로 해당 컬럼은 모두 레거시다.
+        // 이름 규칙이 버전마다 달라(user1_id vs user1last_read_message_id) 하드코딩하지 않고 찾는다.
+        val legacyColumns = findColumns(jdbcTemplate, "chat_rooms", listOf("user1%", "user2%"))
         if (legacyColumns.isEmpty()) return
 
         legacyColumns.forEach { column ->
@@ -150,6 +146,17 @@ class ChatSchemaMigration {
             table,
             pattern
         ).firstOrNull()
+
+    /** 여러 패턴에 맞는 컬럼 이름을 모두 찾는다 */
+    private fun findColumns(jdbcTemplate: JdbcTemplate, table: String, patterns: List<String>): List<String> =
+        patterns.flatMap { pattern ->
+            jdbcTemplate.queryForList(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND column_name LIKE ?",
+                String::class.java,
+                table,
+                pattern
+            )
+        }.distinct()
 
     private fun tableExists(jdbcTemplate: JdbcTemplate, table: String): Boolean =
         jdbcTemplate.queryForObject(
