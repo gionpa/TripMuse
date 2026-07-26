@@ -27,16 +27,17 @@ class AppVersionController(
     ): ResponseEntity<AppVersionResponse> {
         // 지금은 안드로이드만 있다. iOS가 생기면 platform으로 갈라준다.
         val latest = appVersionConfig.android
-        val current = versionCode ?: 0
 
         return ResponseEntity.ok(
             AppVersionResponse(
                 latestVersionCode = latest.latestVersionCode,
                 latestVersionName = latest.latestVersionName,
                 minSupportedVersionCode = latest.minSupportedVersionCode,
-                // 판단을 서버에서 해두면 정책을 바꿀 때 앱을 다시 배포하지 않아도 된다
-                updateAvailable = current < latest.latestVersionCode,
-                updateRequired = current < latest.minSupportedVersionCode,
+                // 판단을 서버에서 해두면 정책을 바꿀 때 앱을 다시 배포하지 않아도 된다.
+                // 버전을 안 알려준 요청은 판단하지 않는다 — 알 수 없다고 막아버리면
+                // 요청 하나 잘못 와도 사용자가 앱에서 쫓겨난다.
+                updateAvailable = versionCode != null && versionCode < latest.latestVersionCode,
+                updateRequired = versionCode != null && versionCode < latest.minSupportedVersionCode,
                 releaseNotes = latest.releaseNotes.ifBlank { null },
                 downloadUrl = latest.downloadUrl
             )
