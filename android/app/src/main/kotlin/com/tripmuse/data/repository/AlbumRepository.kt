@@ -117,13 +117,13 @@ class AlbumRepository @Inject constructor(
         }
     }
 
-    suspend fun revokeShareLink(albumId: Long): Result<Unit> {
+    suspend fun revokeShareLink(albumId: Long): Result<ShareRevokeResponse> {
         return try {
             val response = api.revokeShareLink(albumId)
-            if (response.isSuccessful) {
-                Result.success(Unit)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
             } else {
-                Result.failure(Exception("Failed to revoke share link: ${response.code()}"))
+                Result.failure(Exception("공유 링크 해제에 실패했습니다"))
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

@@ -88,7 +88,7 @@ interface TripMuseApi {
     @DELETE("albums/{albumId}/share")
     suspend fun revokeShareLink(
         @Path("albumId") albumId: Long
-    ): Response<Unit>
+    ): Response<ShareRevokeResponse>
 
     @GET("share/{token}")
     suspend fun resolveShareLink(

@@ -76,13 +76,30 @@ class AlbumViewModel @Inject constructor(
 
     fun createShareLink(albumId: Long, onResult: (Result<com.tripmuse.data.model.ShareLinkResponse>) -> Unit) {
         viewModelScope.launch {
-            onResult(albumRepository.createShareLink(albumId))
+            val result = albumRepository.createShareLink(albumId)
+            // 공유하면 '공유 중' 표시가 켜지도록 상태를 갱신한다
+            if (result.isSuccess) {
+                albumRepository.getAlbumDetail(albumId).onSuccess { album ->
+                    _uiState.value = _uiState.value.copy(album = album)
+                }
+            }
+            onResult(result)
         }
     }
 
-    fun revokeShareLink(albumId: Long, onResult: (Result<Unit>) -> Unit) {
+    fun revokeShareLink(
+        albumId: Long,
+        onResult: (Result<com.tripmuse.data.model.ShareRevokeResponse>) -> Unit
+    ) {
         viewModelScope.launch {
-            onResult(albumRepository.revokeShareLink(albumId))
+            val result = albumRepository.revokeShareLink(albumId)
+            // 해제 후 공유 상태 표시가 바로 사라지도록 앨범을 다시 읽는다
+            if (result.isSuccess) {
+                albumRepository.getAlbumDetail(albumId).onSuccess { album ->
+                    _uiState.value = _uiState.value.copy(album = album)
+                }
+            }
+            onResult(result)
         }
     }
 

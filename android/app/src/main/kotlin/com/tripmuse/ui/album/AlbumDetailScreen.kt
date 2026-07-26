@@ -34,6 +34,7 @@ import com.tripmuse.R
 import com.tripmuse.data.model.Media
 import com.tripmuse.data.model.MediaType
 import com.tripmuse.data.model.UploadStatus
+import com.tripmuse.ui.theme.TripMuseAccents
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +51,55 @@ fun AlbumDetailScreen(
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showRevokeDialog by remember { mutableStateOf(false) }
     var isCreatingShareLink by remember { mutableStateOf(false) }
+
+    // 링크 해제는 되돌릴 수 없고 남에게 영향을 주므로 무엇이 차단되는지 먼저 알린다
+    if (showRevokeDialog) {
+        val viewerCount = uiState.album?.sharedViewerCount ?: 0
+        AlertDialog(
+            onDismissRequest = { showRevokeDialog = false },
+            title = { Text("공유 링크를 해제할까요?") },
+            text = {
+                Text(
+                    buildString {
+                        append("링크가 즉시 무효화되어 앞으로 이 링크로는 앨범을 열 수 없습니다.")
+                        if (viewerCount > 0) {
+                            append(" 링크로 들어온 ${viewerCount}명의 열람 권한도 함께 회수됩니다.")
+                        }
+                        append(" 해제한 링크는 되살릴 수 없고, 다시 공유하면 새 링크가 만들어집니다.")
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRevokeDialog = false
+                        viewModel.revokeShareLink(albumId) { result ->
+                            val message = result.fold(
+                                onSuccess = { response ->
+                                    if (!response.revoked) {
+                                        "공유 중인 링크가 없습니다"
+                                    } else if (response.revokedViewerCount > 0) {
+                                        "공유 링크를 해제했습니다 · ${response.revokedViewerCount}명의 접근이 차단되었습니다"
+                                    } else {
+                                        "공유 링크를 해제했습니다"
+                                    }
+                                },
+                                onFailure = { it.message ?: "공유 링크 해제에 실패했습니다" }
+                            )
+                            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Text("해제", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRevokeDialog = false }) { Text("취소") }
+            }
+        )
+    }
 
     // 공유 링크 발급 후 시스템 공유 시트 표시 (카카오톡 등 외부 메신저로 전달)
     fun shareAlbum() {
@@ -124,8 +173,21 @@ fun AlbumDetailScreen(
                 actions = {
                     val isOwner = uiState.album?.isOwner == true
                     if (isOwner) {
+                        val isShared = uiState.album?.isShared == true
                         IconButton(onClick = { shareAlbum() }, enabled = !isCreatingShareLink) {
-                            Icon(Icons.Default.Share, contentDescription = "공유")
+                            // 공유 중이면 아이콘에 점을 찍어 메뉴를 열지 않고도 상태를 알 수 있게 한다
+                            BadgedBox(
+                                badge = {
+                                    if (isShared) {
+                                        Badge(containerColor = TripMuseAccents.Friend.accent)
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Default.Share,
+                                    contentDescription = if (isShared) "공유 중 · 다시 공유" else "공유"
+                                )
+                            }
                         }
                     }
                     Box {
@@ -147,24 +209,26 @@ fun AlbumDetailScreen(
                                 },
                                 enabled = isOwner
                             )
-                            DropdownMenuItem(
-                                text = { Text("공유 링크 해제") },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.revokeShareLink(albumId) { result ->
-                                        val message = if (result.isSuccess) {
-                                            "공유 링크가 해제되었습니다"
-                                        } else {
-                                            "공유 링크 해제에 실패했습니다"
-                                        }
-                                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.LinkOff, contentDescription = null)
-                                },
-                                enabled = isOwner
-                            )
+                            // 공유 중인 앨범에서만 해제 항목을 보여준다
+                            if (uiState.album?.isShared == true) {
+                                val viewerCount = uiState.album?.sharedViewerCount ?: 0
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (viewerCount > 0) "공유 링크 해제 · ${viewerCount}명 열람 중"
+                                            else "공유 링크 해제"
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        showRevokeDialog = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.LinkOff, contentDescription = null)
+                                    },
+                                    enabled = isOwner
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("앨범 삭제") },
                                 onClick = {

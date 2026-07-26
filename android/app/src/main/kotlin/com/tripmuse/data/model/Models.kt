@@ -58,7 +58,16 @@ data class AlbumDetail(
     val owner: User,
     val isOwner: Boolean = false,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    /** 공유 링크가 살아 있는지 (소유자에게만 내려온다) */
+    val isShared: Boolean = false,
+    /** 그 링크로 들어와 열람 권한을 가진 사람 수 */
+    val sharedViewerCount: Long = 0
+)
+
+data class ShareRevokeResponse(
+    val revoked: Boolean,
+    val revokedViewerCount: Long
 )
 
 data class AlbumListResponse(
