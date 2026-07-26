@@ -32,8 +32,12 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Popup
+import kotlin.math.roundToInt
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -176,6 +180,19 @@ class ChatRoomViewModel @Inject constructor(
                 }
             }
         // 폴링 실패는 조용히 넘어가고 다음 주기에 재시도
+    }
+
+    /** 메타버스 캐릭터 변경 — 서버 저장 후 방 정보를 다시 받아 내 캐릭터를 갱신한다 */
+    fun changeCharacter(roomId: Long, style: String) {
+        viewModelScope.launch {
+            chatRepository.updateCharacterStyle(style).onSuccess {
+                chatRepository.getRoom(roomId).onSuccess { room ->
+                    _uiState.value = _uiState.value.copy(room = room)
+                }
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(error = e.message ?: "캐릭터 변경 실패")
+            }
+        }
     }
 
     /**
@@ -579,15 +596,45 @@ fun ChatRoomScreen(
         ) {
             // 상단 초대 영역과 채팅 사이의 2D 메타버스 스테이지 (세로 30%)
             val stageHeight = (LocalConfiguration.current.screenHeightDp * 0.3f).dp
-            MetaverseStage(
-                members = uiState.room?.members ?: emptyList(),
-                currentUserId = uiState.messages.firstOrNull { it.isMine }?.senderId ?: -1L,
-                latestMessage = uiState.messages.lastOrNull(),
-                stageHeight = stageHeight,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(stageHeight)
-            )
+            val myUserId = uiState.messages.firstOrNull { it.isMine }?.senderId ?: -1L
+            var stageMenu by remember { mutableStateOf<Offset?>(null) }
+            var showEmotionMenu by remember { mutableStateOf(false) }
+            var showCharPicker by remember { mutableStateOf(false) }
+            var myEmotion by remember { mutableStateOf<Emotion?>(null) }
+            Box(modifier = Modifier.fillMaxWidth().height(stageHeight)) {
+                MetaverseStage(
+                    members = uiState.room?.members ?: emptyList(),
+                    currentUserId = myUserId,
+                    latestMessage = uiState.messages.lastOrNull(),
+                    stageHeight = stageHeight,
+                    myEmotion = myEmotion,
+                    onMyCharacterTap = { off -> stageMenu = off; showEmotionMenu = false },
+                    onEmotionConsumed = { myEmotion = null },
+                    modifier = Modifier.fillMaxSize()
+                )
+                stageMenu?.let { off ->
+                    Popup(
+                        offset = IntOffset(off.x.roundToInt(), off.y.roundToInt()),
+                        onDismissRequest = { stageMenu = null; showEmotionMenu = false }
+                    ) {
+                        if (showEmotionMenu) {
+                            EmotionMenu { emo -> myEmotion = emo; stageMenu = null; showEmotionMenu = false }
+                        } else {
+                            CharacterContextMenu(
+                                onCharacterChange = { showCharPicker = true; stageMenu = null },
+                                onEmotionPick = { showEmotionMenu = true }
+                            )
+                        }
+                    }
+                }
+            }
+            if (showCharPicker) {
+                CharacterPickerDialog(
+                    currentKey = uiState.room?.members?.firstOrNull { it.id == myUserId }?.characterStyle,
+                    onPick = { style -> viewModel.changeCharacter(roomId, style.key); showCharPicker = false },
+                    onDismiss = { showCharPicker = false }
+                )
+            }
             Box(modifier = Modifier.weight(1f)) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))

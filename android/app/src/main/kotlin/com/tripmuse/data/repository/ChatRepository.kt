@@ -47,6 +47,18 @@ class ChatRepository @Inject constructor(
         }
     }
 
+    suspend fun updateCharacterStyle(style: String): Result<Unit> {
+        return try {
+            val response = api.updateCharacter(com.tripmuse.data.model.UpdateCharacterRequest(style))
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(Exception("캐릭터를 변경하지 못했습니다"))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(Exception("네트워크 오류: ${e.message}"))
+        }
+    }
+
     suspend fun getRoom(roomId: Long): Result<ChatRoom> {
         return try {
             val response = api.getChatRoom(roomId)

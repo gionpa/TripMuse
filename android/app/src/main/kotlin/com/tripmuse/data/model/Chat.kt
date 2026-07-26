@@ -3,7 +3,8 @@ package com.tripmuse.data.model
 data class ChatUser(
     val id: Long,
     val nickname: String,
-    val profileImageUrl: String?
+    val profileImageUrl: String?,
+    val characterStyle: String? = null
 )
 
 data class ChatRoom(

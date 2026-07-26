@@ -8,7 +8,9 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -19,7 +21,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -61,11 +65,14 @@ fun MetaverseStage(
     currentUserId: Long,
     latestMessage: ChatMessage?,
     stageHeight: Dp,
+    myEmotion: Emotion? = null,
+    onMyCharacterTap: (Offset) -> Unit = {},
+    onEmotionConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val measurer = rememberTextMeasurer()
 
-    // 상시 idle 애니메이션 (캐릭터가 숨쉬듯 위아래로)
+    // idle: 캐릭터가 숨쉬듯 아주 느리게 위아래로. 배경은 이 값을 읽지 않아 다시 그려지지 않는다.
     val infinite = rememberInfiniteTransition(label = "idle")
     val clock by infinite.animateFloat(
         initialValue = 0f, targetValue = (2 * PI).toFloat(),
@@ -93,40 +100,72 @@ fun MetaverseStage(
         speech = null
     }
 
-    // Canvas를 스테이지보다 살짝 크게 그리고 Box로 clip한다.
-    // Compose Canvas 하단 경계 픽셀에 나타나는 GPU 아티팩트(무지개 띠)를 잘라내기 위함.
-    Box(modifier.clipToBounds()) {
-      Canvas(Modifier.fillMaxWidth().height(stageHeight + 14.dp)) {
-        drawCafe(measurer)
-        if (members.isEmpty()) return@Canvas
+    // 감정: 선택되면 2.5초간 재생 후 소진 콜백
+    val emoAnim = remember { Animatable(0f) }
+    LaunchedEffect(myEmotion) {
+        if (myEmotion == null) return@LaunchedEffect
+        emoAnim.snapTo(0f)
+        emoAnim.animateTo(1f, tween(2500, easing = LinearEasing))
+        onEmotionConsumed()
+    }
 
-        // 캐릭터를 바닥 앞쪽에 x축으로 고르게 분산 (발 아래 이름표까지 스테이지 안에 들어오게)
+    // 캐릭터 배치 계산 (draw와 터치 hit-test가 공유)
+    fun layout(width: Float, height: Float): Triple<Float, Float, Float> {
+        val n = members.size.coerceAtLeast(1)
+        val marginX = width * 0.16f
+        val usable = width - marginX * 2
+        val groundY = height * 0.78f
+        val charH = (height * 0.5f).coerceAtMost(usable / n * 1.5f)
+        return Triple(marginX, groundY, charH)
+    }
+    fun centerX(index: Int, width: Float, marginX: Float): Float {
         val n = members.size
-        val marginX = size.width * 0.16f
-        val usable = size.width - marginX * 2
-        val groundY = size.height * 0.78f
-        val charH = (size.height * 0.5f).coerceAtMost(usable / n * 1.5f)
+        val usable = width - marginX * 2
+        return if (n <= 1) width / 2f else marginX + usable * index / (n - 1)
+    }
 
-        members.forEachIndexed { i, member ->
-            val cx = if (n == 1) size.width / 2 else marginX + usable * i / (n - 1)
-            val phase = i * 1.3f
-            val bob = sin(clock + phase) * (charH * 0.02f)
-            // 말풍선이 떠 있는 동안에만 발화 연출 (방에 들어오자마자 마지막 발화자가 계속 말하는 것처럼 보이지 않게)
-            val speaking = member.id == speakerId && speech != null
-            val jumpY = if (speaking) sin(jump.value * PI.toFloat()) * (charH * 0.16f) else 0f
-            drawCharacter(
-                cx = cx, groundY = groundY - bob - jumpY, height = charH,
-                bodyColor = CHARACTER_COLORS[i % CHARACTER_COLORS.size],
-                hairColor = HAIR_COLORS[i % HAIR_COLORS.size],
-                speaking = speaking, jump = if (speaking) jump.value else 0f,
-                isMe = member.id == currentUserId,
-                name = member.nickname, measurer = measurer
-            )
-            if (speaking) {
-                drawSpeechBubble(measurer, speech!!, cx, groundY - charH - jumpY - size.height * 0.02f)
+    Box(modifier.clipToBounds()) {
+        val canvasMod = Modifier.fillMaxWidth().height(stageHeight + 14.dp)
+
+        // 배경(커피샵)은 정적이므로 레이어로 캐시한다 → idle/발화마다 재드로우되지 않아 CPU를 아낀다.
+        Spacer(canvasMod.drawWithCache { onDrawBehind { drawCafe(measurer) } })
+
+        // 캐릭터 레이어만 애니메이션 값을 읽어 재드로우된다.
+        Canvas(
+            canvasMod.pointerInput(members, currentUserId) {
+                detectTapGestures { tap ->
+                    val myIndex = members.indexOfFirst { it.id == currentUserId }
+                    if (myIndex < 0) return@detectTapGestures
+                    val (marginX, groundY, charH) = layout(size.width.toFloat(), size.height.toFloat())
+                    val cx = centerX(myIndex, size.width.toFloat(), marginX)
+                    val bodyW = charH * 0.42f
+                    if (tap.x in (cx - bodyW)..(cx + bodyW) && tap.y in (groundY - charH)..(groundY + charH * 0.15f)) {
+                        onMyCharacterTap(Offset(cx, groundY - charH))
+                    }
+                }
+            }
+        ) {
+            if (members.isEmpty()) return@Canvas
+            val (marginX, groundY, charH) = layout(size.width, size.height)
+            members.forEachIndexed { i, member ->
+                val cx = centerX(i, size.width, marginX)
+                val isMe = member.id == currentUserId
+                val emotion = if (isMe) myEmotion else null
+                val bob = sin(clock + i * 1.3f) * (charH * 0.02f)
+                val speaking = member.id == speakerId && speech != null
+                val jumpY = if (speaking) sin(jump.value * PI.toFloat()) * (charH * 0.16f) else 0f
+                drawStageCharacter(
+                    cx0 = cx, groundY0 = groundY - bob - jumpY, height = charH,
+                    style = styleForKey(member.characterStyle, i),
+                    speaking = speaking, jump = if (speaking) jump.value else 0f,
+                    emotion = emotion, emoT = emoAnim.value,
+                    isMe = isMe, name = member.nickname, measurer = measurer
+                )
+                if (speaking) {
+                    drawSpeechBubble(measurer, speech!!, cx, groundY - charH - jumpY - size.height * 0.02f)
+                }
             }
         }
-      }
     }
 }
 
@@ -213,74 +252,237 @@ private fun DrawScope.drawCafe(measurer: TextMeasurer) {
     drawCircle(Color(0xFF6FB566), w * 0.032f, Offset(potX + w * 0.075f, h * 0.63f))
 }
 
+// ---------------- 감정 ----------------
+
+enum class Emotion(val label: String, val emoji: String) {
+    ANGRY("화남", "💢"),
+    EXCITED("신남", "✨"),
+    LAUGH("박장대소", "😂"),
+    SAD("슬픔", "💧"),
+    DUMBFOUNDED("어이없음", "💦")
+}
+
 // ---------------- 캐릭터 ----------------
 
-private fun DrawScope.drawCharacter(
-    cx: Float, groundY: Float, height: Float,
-    bodyColor: Color, hairColor: Color,
-    speaking: Boolean, jump: Float, isMe: Boolean,
-    name: String, measurer: TextMeasurer
+private fun DrawScope.drawStageCharacter(
+    cx0: Float, groundY0: Float, height: Float,
+    style: CharacterStyle,
+    speaking: Boolean, jump: Float,
+    emotion: Emotion?, emoT: Float,
+    isMe: Boolean, name: String, measurer: TextMeasurer,
+    showName: Boolean = true
 ) {
     val headR = height * 0.20f
     val bodyW = height * 0.42f
     val bodyH = height * 0.42f
+    val bodyColor = style.bodyColor
+
+    // 감정별 몸 움직임 (좌우 부들·폴짝·들썩·처짐)
+    var cx = cx0
+    var groundY = groundY0
+    when (emotion) {
+        Emotion.ANGRY -> cx += sin(emoT * 46f) * height * 0.018f
+        Emotion.EXCITED -> groundY -= kotlin.math.abs(sin(emoT * PI.toFloat() * 5)) * height * 0.14f
+        Emotion.LAUGH -> groundY -= kotlin.math.abs(sin(emoT * PI.toFloat() * 8)) * height * 0.05f
+        Emotion.SAD -> groundY += height * 0.045f
+        Emotion.DUMBFOUNDED -> cx += sin(emoT * 5f) * height * 0.012f
+        null -> {}
+    }
     val headCy = groundY - bodyH - headR * 0.9f
 
-    // 바닥 그림자
-    drawOval(Color(0x33000000), topLeft = Offset(cx - bodyW * 0.55f, groundY - height * 0.03f), size = Size(bodyW * 1.1f, height * 0.07f))
+    // 바닥 그림자 (원래 발 위치 기준)
+    drawOval(Color(0x33000000), topLeft = Offset(cx - bodyW * 0.55f, groundY0 - height * 0.03f), size = Size(bodyW * 1.1f, height * 0.07f))
 
-    // 발화 강조 링
-    if (speaking) {
-        drawCircle(bodyColor.copy(alpha = 0.18f), height * 0.34f, Offset(cx, groundY - bodyH * 0.5f))
+    // 발화/감정 강조 링
+    if (speaking || emotion != null) {
+        val ring = (if (emotion == Emotion.ANGRY) Color(0xFFF24236) else bodyColor).copy(alpha = 0.16f)
+        drawCircle(ring, height * 0.34f, Offset(cx, groundY - bodyH * 0.5f))
     }
 
-    // 몸통 (둥근 사다리꼴 느낌의 라운드 사각형)
+    // 몸통
     drawRoundRectC(bodyColor, Rect(cx - bodyW / 2, groundY - bodyH, cx + bodyW / 2, groundY), bodyW * 0.32f)
-    // 옷 밝은 하이라이트
     drawRoundRectC(bodyColor.lighten(0.12f), Rect(cx - bodyW / 2, groundY - bodyH, cx - bodyW * 0.15f, groundY), bodyW * 0.3f)
 
-    // 팔 — 발화 시 한쪽을 위로 드는 제스처
+    // 팔 — 감정/발화별 포즈
     val armY = groundY - bodyH * 0.72f
-    val raise = if (speaking) jump * bodyH * 0.5f else 0f
-    drawLine(bodyColor.darken(0.1f), Offset(cx - bodyW * 0.5f, armY), Offset(cx - bodyW * 0.66f, armY + bodyH * 0.28f), height * 0.09f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-    drawLine(bodyColor.darken(0.1f), Offset(cx + bodyW * 0.5f, armY), Offset(cx + bodyW * 0.62f, armY + bodyH * 0.24f - raise), height * 0.09f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-
-    // 머리
-    drawCircle(SKIN, headR, Offset(cx, headCy))
-    // 헤어 (윗머리 반원 느낌)
-    val hair = Path().apply {
-        addArc(Rect(cx - headR, headCy - headR, cx + headR, headCy + headR * 0.5f), 180f, 180f)
-        lineTo(cx + headR, headCy)
-        arcTo(Rect(cx - headR, headCy - headR, cx + headR, headCy + headR), 0f, -180f, false)
-        close()
+    val armColor = bodyColor.darken(0.1f)
+    val armW = height * 0.09f
+    val cap = androidx.compose.ui.graphics.StrokeCap.Round
+    val armsUp = emotion == Emotion.EXCITED || emotion == Emotion.LAUGH
+    if (armsUp) {
+        // 양팔 번쩍
+        drawLine(armColor, Offset(cx - bodyW * 0.5f, armY), Offset(cx - bodyW * 0.72f, armY - bodyH * 0.34f), armW, cap = cap)
+        drawLine(armColor, Offset(cx + bodyW * 0.5f, armY), Offset(cx + bodyW * 0.72f, armY - bodyH * 0.34f), armW, cap = cap)
+    } else if (emotion == Emotion.SAD) {
+        // 양팔 축 처짐
+        drawLine(armColor, Offset(cx - bodyW * 0.5f, armY), Offset(cx - bodyW * 0.56f, armY + bodyH * 0.4f), armW, cap = cap)
+        drawLine(armColor, Offset(cx + bodyW * 0.5f, armY), Offset(cx + bodyW * 0.56f, armY + bodyH * 0.4f), armW, cap = cap)
+    } else {
+        val raise = if (speaking) jump * bodyH * 0.5f else 0f
+        drawLine(armColor, Offset(cx - bodyW * 0.5f, armY), Offset(cx - bodyW * 0.66f, armY + bodyH * 0.28f), armW, cap = cap)
+        drawLine(armColor, Offset(cx + bodyW * 0.5f, armY), Offset(cx + bodyW * 0.62f, armY + bodyH * 0.24f - raise), armW, cap = cap)
     }
-    drawPath(hair, hairColor)
-    drawArcC(hairColor, Rect(cx - headR, headCy - headR, cx + headR, headCy + headR), 180f, 180f)
 
-    // 눈
+    // 머리 + 헤어
+    drawCircle(SKIN, headR, Offset(cx, headCy))
+    drawHair(style.hair, cx, headCy, headR, style.hairColor)
+
+    // 표정
     val eyeY = headCy + headR * 0.05f
     val eyeDx = headR * 0.38f
-    drawCircle(Color(0xFF2A2320), headR * 0.11f, Offset(cx - eyeDx, eyeY))
-    drawCircle(Color(0xFF2A2320), headR * 0.11f, Offset(cx + eyeDx, eyeY))
-    // 볼터치
-    drawCircle(Color(0x33F26D5F), headR * 0.13f, Offset(cx - headR * 0.55f, eyeY + headR * 0.28f))
-    drawCircle(Color(0x33F26D5F), headR * 0.13f, Offset(cx + headR * 0.55f, eyeY + headR * 0.28f))
-    // 입 — 발화 시 벌어짐
-    if (speaking) {
-        drawCircle(Color(0xFF7A3B34), headR * 0.16f, Offset(cx, eyeY + headR * 0.45f))
-    } else {
-        drawArcC(Color(0xFF7A3B34), Rect(cx - headR * 0.22f, eyeY + headR * 0.22f, cx + headR * 0.22f, eyeY + headR * 0.55f), 20f, 140f, stroke = 2.5f)
+    val ink = Color(0xFF2A2320)
+    val mouthColor = Color(0xFF7A3B34)
+    fun eyeDot(r: Float = 0.12f) {
+        drawCircle(ink, headR * r, Offset(cx - eyeDx, eyeY)); drawCircle(ink, headR * r, Offset(cx + eyeDx, eyeY))
+    }
+    when (emotion) {
+        Emotion.ANGRY -> {
+            drawCircle(Color(0x33F24236), headR, Offset(cx, headCy))            // 붉으락
+            eyeDot(0.13f)
+            // 찡그린 눈썹 \  /
+            drawLine(ink, Offset(cx - eyeDx - headR * 0.2f, eyeY - headR * 0.42f), Offset(cx - eyeDx + headR * 0.18f, eyeY - headR * 0.22f), 3f, cap = cap)
+            drawLine(ink, Offset(cx + eyeDx + headR * 0.2f, eyeY - headR * 0.42f), Offset(cx + eyeDx - headR * 0.18f, eyeY - headR * 0.22f), 3f, cap = cap)
+            drawArcC(mouthColor, Rect(cx - headR * 0.24f, eyeY + headR * 0.5f, cx + headR * 0.24f, eyeY + headR * 0.8f), 200f, 140f, stroke = 3f) // 찡그린 입
+        }
+        Emotion.EXCITED -> {
+            drawCircle(ink, headR * 0.15f, Offset(cx - eyeDx, eyeY)); drawCircle(ink, headR * 0.15f, Offset(cx + eyeDx, eyeY))
+            drawCircle(Color.White, headR * 0.05f, Offset(cx - eyeDx + headR * 0.05f, eyeY - headR * 0.05f))
+            drawCircle(Color.White, headR * 0.05f, Offset(cx + eyeDx + headR * 0.05f, eyeY - headR * 0.05f))
+            drawArcC(mouthColor, Rect(cx - headR * 0.3f, eyeY + headR * 0.1f, cx + headR * 0.3f, eyeY + headR * 0.7f), 0f, 180f) // 활짝
+        }
+        Emotion.LAUGH -> {
+            // 감은 눈 ^ ^
+            drawArcC(ink, Rect(cx - eyeDx - headR * 0.16f, eyeY - headR * 0.1f, cx - eyeDx + headR * 0.16f, eyeY + headR * 0.16f), 180f, 180f, stroke = 3f)
+            drawArcC(ink, Rect(cx + eyeDx - headR * 0.16f, eyeY - headR * 0.1f, cx + eyeDx + headR * 0.16f, eyeY + headR * 0.16f), 180f, 180f, stroke = 3f)
+            drawArcC(mouthColor, Rect(cx - headR * 0.34f, eyeY + headR * 0.05f, cx + headR * 0.34f, eyeY + headR * 0.85f), 0f, 180f) // 크게 웃음
+        }
+        Emotion.SAD -> {
+            drawCircle(Color(0x224A90D9), headR, Offset(cx, headCy))
+            eyeDot(0.12f)
+            // 처진 눈썹
+            drawLine(ink, Offset(cx - eyeDx - headR * 0.16f, eyeY - headR * 0.28f), Offset(cx - eyeDx + headR * 0.18f, eyeY - headR * 0.42f), 3f, cap = cap)
+            drawLine(ink, Offset(cx + eyeDx + headR * 0.16f, eyeY - headR * 0.28f), Offset(cx + eyeDx - headR * 0.18f, eyeY - headR * 0.42f), 3f, cap = cap)
+            // 눈물
+            drawCircle(Color(0xCC5AB4E5), headR * 0.1f, Offset(cx - eyeDx, eyeY + headR * 0.35f + (emoT * headR)))
+            drawArcC(mouthColor, Rect(cx - headR * 0.2f, eyeY + headR * 0.55f, cx + headR * 0.2f, eyeY + headR * 0.85f), 200f, 140f, stroke = 2.5f)
+        }
+        Emotion.DUMBFOUNDED -> {
+            // 반쯤 뜬 눈 (가로선)
+            drawLine(ink, Offset(cx - eyeDx - headR * 0.14f, eyeY), Offset(cx - eyeDx + headR * 0.14f, eyeY), 3f, cap = cap)
+            drawLine(ink, Offset(cx + eyeDx - headR * 0.14f, eyeY), Offset(cx + eyeDx + headR * 0.14f, eyeY), 3f, cap = cap)
+            drawLine(mouthColor, Offset(cx - headR * 0.18f, eyeY + headR * 0.5f), Offset(cx + headR * 0.18f, eyeY + headR * 0.5f), 2.5f, cap = cap) // 일자 입
+        }
+        null -> {
+            eyeDot()
+            drawCircle(Color(0x33F26D5F), headR * 0.13f, Offset(cx - headR * 0.55f, eyeY + headR * 0.28f))
+            drawCircle(Color(0x33F26D5F), headR * 0.13f, Offset(cx + headR * 0.55f, eyeY + headR * 0.28f))
+            if (speaking) drawCircle(mouthColor, headR * 0.16f, Offset(cx, eyeY + headR * 0.45f))
+            else drawArcC(mouthColor, Rect(cx - headR * 0.22f, eyeY + headR * 0.22f, cx + headR * 0.22f, eyeY + headR * 0.55f), 20f, 140f, stroke = 2.5f)
+        }
+    }
+
+    // 안경
+    if (style.glasses) {
+        val gr = headR * 0.26f
+        drawArcC(ink, Rect(cx - eyeDx - gr, eyeY - gr, cx - eyeDx + gr, eyeY + gr), 0f, 360f, stroke = 3f)
+        drawArcC(ink, Rect(cx + eyeDx - gr, eyeY - gr, cx + eyeDx + gr, eyeY + gr), 0f, 360f, stroke = 3f)
+        drawLine(ink, Offset(cx - eyeDx + gr, eyeY), Offset(cx + eyeDx - gr, eyeY), 2.5f)
+    }
+
+    // 감정 이모지 이펙트 (머리 옆 위)
+    if (emotion != null) {
+        val es = TextStyle(fontSize = (headR * 0.9f).toSpFallback())
+        val er = measurer.measure(emotion.emoji, es)
+        val ex = cx + headR * 0.9f
+        val ey = headCy - headR * 1.1f - (if (emotion == Emotion.EXCITED) kotlin.math.abs(sin(emoT * PI.toFloat() * 5)) * headR * 0.4f else 0f)
+        drawText(er, topLeft = Offset(ex, ey))
     }
 
     // 이름표
-    val label = if (isMe) "나" else name.take(6)
-    val ts = TextStyle(color = Color(0xFF3A2E28), fontSize = (height * 0.11f).toSpFallback(), fontWeight = FontWeight.SemiBold)
-    val res = measurer.measure(label, ts)
-    val tagW = res.size.width + height * 0.12f
-    val tagRect = Rect(cx - tagW / 2, groundY + height * 0.02f, cx + tagW / 2, groundY + height * 0.02f + res.size.height + height * 0.04f)
-    drawRoundRectC(if (isMe) Color(0xFFFCF1DC) else Color(0xCCFFFFFF), tagRect, tagRect.height / 2)
-    if (isMe) drawRoundRectStroke(Color(0xFFF0A02E), tagRect, tagRect.height / 2, 2f)
-    drawText(res, topLeft = Offset(cx - res.size.width / 2, tagRect.top + height * 0.02f))
+    if (showName) {
+        val label = if (isMe) "나" else name.take(6)
+        val ts = TextStyle(color = Color(0xFF3A2E28), fontSize = (height * 0.11f).toSpFallback(), fontWeight = FontWeight.SemiBold)
+        val res = measurer.measure(label, ts)
+        val tagW = res.size.width + height * 0.12f
+        val tagRect = Rect(cx - tagW / 2, groundY0 + height * 0.02f, cx + tagW / 2, groundY0 + height * 0.02f + res.size.height + height * 0.04f)
+        drawRoundRectC(if (isMe) Color(0xFFFCF1DC) else Color(0xCCFFFFFF), tagRect, tagRect.height / 2)
+        if (isMe) drawRoundRectStroke(Color(0xFFF0A02E), tagRect, tagRect.height / 2, 2f)
+        drawText(res, topLeft = Offset(cx - res.size.width / 2, tagRect.top + height * 0.02f))
+    }
+}
+
+/** 캐릭터 하나만 그리는 미리보기 (캐릭터 선택 모달용) */
+@Composable
+fun CharacterPreview(style: CharacterStyle, modifier: Modifier = Modifier) {
+    val measurer = rememberTextMeasurer()
+    Canvas(modifier) {
+        drawStageCharacter(
+            cx0 = size.width / 2f, groundY0 = size.height * 0.9f, height = size.height * 0.82f,
+            style = style, speaking = false, jump = 0f, emotion = null, emoT = 0f,
+            isMe = false, name = "", measurer = measurer, showName = false
+        )
+    }
+}
+
+/** 헤어 스타일별 그리기 (머리 원 위에 얹는다) */
+private fun DrawScope.drawHair(hair: HairType, cx: Float, headCy: Float, headR: Float, color: Color) {
+    fun topCap(extend: Float = 0.5f) {
+        // 정수리를 덮는 반원 + 이마 라인
+        val p = Path().apply {
+            addArc(Rect(cx - headR, headCy - headR, cx + headR, headCy + headR * extend), 180f, 180f)
+        }
+        drawPath(p, color)
+        drawArcC(color, Rect(cx - headR, headCy - headR, cx + headR, headCy + headR), 182f, 176f)
+    }
+    when (hair) {
+        HairType.SHORT -> topCap(0.35f)
+        HairType.BOB -> {
+            topCap(0.5f)
+            // 귀 옆으로 턱선까지 내려오는 단발
+            drawRoundRectC(color, Rect(cx - headR * 1.02f, headCy - headR * 0.2f, cx - headR * 0.72f, headCy + headR * 0.95f), headR * 0.2f)
+            drawRoundRectC(color, Rect(cx + headR * 0.72f, headCy - headR * 0.2f, cx + headR * 1.02f, headCy + headR * 0.95f), headR * 0.2f)
+        }
+        HairType.LONG -> {
+            topCap(0.55f)
+            // 어깨까지 흘러내리는 긴 머리
+            drawRoundRectC(color, Rect(cx - headR * 1.05f, headCy - headR * 0.1f, cx - headR * 0.68f, headCy + headR * 1.9f), headR * 0.25f)
+            drawRoundRectC(color, Rect(cx + headR * 0.68f, headCy - headR * 0.1f, cx + headR * 1.05f, headCy + headR * 1.9f), headR * 0.25f)
+        }
+        HairType.CURLY -> {
+            // 곱슬 — 정수리에 작은 원 여러 개
+            for (a in 0..6) {
+                val ang = PI.toFloat() + a * (PI.toFloat() / 6)
+                val bx = cx + kotlin.math.cos(ang) * headR * 0.92f
+                val by = headCy + sin(ang) * headR * 0.92f
+                drawCircle(color, headR * 0.3f, Offset(bx, by))
+            }
+            drawCircle(color, headR * 0.34f, Offset(cx, headCy - headR * 0.85f))
+        }
+        HairType.PONYTAIL -> {
+            topCap(0.45f)
+            // 뒤로 묶은 꼬리 (오른쪽 옆)
+            drawCircle(color, headR * 0.18f, Offset(cx + headR * 0.95f, headCy - headR * 0.55f))
+            val tail = Path().apply {
+                moveTo(cx + headR * 0.95f, headCy - headR * 0.6f)
+                quadraticBezierTo(cx + headR * 1.7f, headCy, cx + headR * 1.2f, headCy + headR * 1.1f)
+                quadraticBezierTo(cx + headR * 1.1f, headCy + headR * 0.4f, cx + headR * 0.8f, headCy - headR * 0.2f)
+                close()
+            }
+            drawPath(tail, color)
+        }
+        HairType.CAP -> {
+            // 야구모자 — 캡 + 챙
+            val p = Path().apply { addArc(Rect(cx - headR, headCy - headR, cx + headR, headCy + headR * 0.3f), 180f, 180f) }
+            drawPath(p, color)
+            drawRoundRectC(color, Rect(cx - headR * 0.1f, headCy - headR * 0.15f, cx + headR * 1.25f, headCy + headR * 0.12f), headR * 0.1f) // 챙
+            drawCircle(color.lighten(0.25f), headR * 0.1f, Offset(cx, headCy - headR * 0.6f)) // 버튼
+        }
+        HairType.BUN -> {
+            topCap(0.35f)
+            drawCircle(color, headR * 0.34f, Offset(cx, headCy - headR * 1.05f)) // 정수리 번
+        }
+        HairType.BALD -> { /* 민머리 */ }
+    }
 }
 
 // ---------------- 말풍선 ----------------

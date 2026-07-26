@@ -55,6 +55,9 @@ interface TripMuseApi {
     @GET("users/me")
     suspend fun getCurrentUser(): Response<User>
 
+    @PUT("users/me/character")
+    suspend fun updateCharacter(@Body request: UpdateCharacterRequest): Response<Unit>
+
     @Multipart
     @POST("users/me/profile-image")
     suspend fun uploadProfileImage(
