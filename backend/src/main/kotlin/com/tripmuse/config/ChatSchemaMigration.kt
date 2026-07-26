@@ -48,8 +48,14 @@ class ChatSchemaMigration {
     }
 
     private fun relaxOrDropLegacyColumns(jdbcTemplate: JdbcTemplate) {
-        val legacyColumns = listOf("user1_id", "user2_id")
-        if (legacyColumns.none { columnExists(jdbcTemplate, "chat_rooms", it) }) return
+        // 참여자 ID뿐 아니라 읽음 위치 컬럼도 NOT NULL이라 새 방 INSERT를 막는다
+        val legacyColumns = listOf(
+            "user1_id",
+            "user2_id",
+            "user1_last_read_message_id",
+            "user2_last_read_message_id"
+        ).filter { columnExists(jdbcTemplate, "chat_rooms", it) }
+        if (legacyColumns.isEmpty()) return
 
         legacyColumns.forEach { column ->
             if (isNotNull(jdbcTemplate, "chat_rooms", column)) {
