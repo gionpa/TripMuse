@@ -8,6 +8,7 @@ data class UserResponse(
     val email: String,
     val nickname: String,
     val profileImageUrl: String?,
+    val characterStyle: String?,
     val createdAt: LocalDateTime,
     val stats: UserStats? = null
 ) {
@@ -18,6 +19,7 @@ data class UserResponse(
                 email = user.email,
                 nickname = user.nickname,
                 profileImageUrl = user.profileImageUrl,
+                characterStyle = user.characterStyle,
                 createdAt = user.createdAt,
                 stats = stats
             )

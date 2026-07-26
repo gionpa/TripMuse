@@ -32,6 +32,14 @@ class UserService(
         return UserResponse.from(user, stats)
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    fun updateCharacterStyle(userId: Long, style: String): UserResponse {
+        val user = findUserById(userId)
+        user.characterStyle = style
+        val saved = userRepository.save(user)
+        return UserResponse.from(saved, getUserStats(userId))
+    }
+
     private fun getUserStats(userId: Long): UserStats {
         val albumCount = albumRepository.countByUserId(userId)
         val imageCount = mediaRepository.countByUserIdAndType(userId, MediaType.IMAGE)

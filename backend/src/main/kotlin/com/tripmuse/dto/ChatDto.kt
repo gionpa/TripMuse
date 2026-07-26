@@ -12,10 +12,11 @@ import java.time.LocalDateTime
 data class ChatUserResponse(
     val id: Long,
     val nickname: String,
-    val profileImageUrl: String?
+    val profileImageUrl: String?,
+    val characterStyle: String?
 ) {
     companion object {
-        fun from(user: User) = ChatUserResponse(user.id, user.nickname, user.profileImageUrl)
+        fun from(user: User) = ChatUserResponse(user.id, user.nickname, user.profileImageUrl, user.characterStyle)
     }
 }
 

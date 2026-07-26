@@ -47,4 +47,17 @@ class UserController(
         val storageUsage = userService.getStorageUsage(user.id)
         return ResponseEntity.ok(storageUsage)
     }
+
+    /** 메타버스 캐릭터 스타일 변경 (다음 변경 전까지 유지) */
+    @PutMapping("/me/character")
+    fun updateCharacter(
+        @AuthenticationPrincipal user: CustomUserDetails,
+        @RequestBody request: UpdateCharacterRequest
+    ): ResponseEntity<UserResponse> {
+        return ResponseEntity.ok(userService.updateCharacterStyle(user.id, request.characterStyle))
+    }
 }
+
+data class UpdateCharacterRequest(
+    val characterStyle: String
+)
