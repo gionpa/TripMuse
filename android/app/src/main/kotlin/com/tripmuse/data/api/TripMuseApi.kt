@@ -28,6 +28,16 @@ interface TripMuseApi {
         @Query("versionCode") versionCode: Int
     ): Response<AppVersionInfo>
 
+    // Notifications (공유 앨범 이벤트)
+    @GET("notifications")
+    suspend fun getNotifications(): Response<ServerNotificationListResponse>
+
+    @GET("notifications/unread-count")
+    suspend fun getNotificationUnreadCount(): Response<ServerUnreadCountResponse>
+
+    @POST("notifications/read")
+    suspend fun markNotificationsRead(): Response<Unit>
+
     // Auth
     @POST("auth/signup")
     suspend fun signup(@Body request: SignupRequest): Response<AuthResponse>

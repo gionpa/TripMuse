@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.tripmuse.data.model.ServerNotification
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,6 +63,39 @@ class NotificationStore @Inject constructor(
             prefs[key] = json.encodeToString(listSerializer, current.map { it.copy(read = true) })
         }
     }
+
+    /**
+     * 서버 알림(공유 앨범 이벤트)을 로컬에 반영한다.
+     * 서버가 read 상태의 진실이므로 "server-" 항목은 매번 서버 목록으로 통째로 교체하고,
+     * 기기에서 감지한 로컬 항목(친구 접속)은 그대로 둔다.
+     */
+    suspend fun syncFromServer(items: List<ServerNotification>) {
+        context.notificationCenterStore.edit { prefs ->
+            val local = decode(prefs[key]).filterNot { it.id.startsWith("server-") }
+            val server = items.mapNotNull { s ->
+                val type = NotificationType.fromServer(s.type) ?: return@mapNotNull null
+                AppNotification(
+                    id = "server-${s.id}",
+                    type = type,
+                    title = s.title,
+                    body = s.body,
+                    timestamp = parseTime(s.createdAt),
+                    read = s.read,
+                    albumId = s.albumId
+                )
+            }
+            val merged = (local + server).sortedByDescending { it.timestamp }.take(MAX_ITEMS)
+            prefs[key] = json.encodeToString(listSerializer, merged)
+        }
+    }
+
+    // 서버(Railway)는 createdAt을 UTC LocalDateTime으로 준다. 기기 타임존으로 해석하면
+    // 그 시차만큼 어긋나(예: KST에서 9시간 전으로) 표시되므로 UTC로 파싱한다.
+    private fun parseTime(iso: String): Long = runCatching {
+        java.time.LocalDateTime.parse(iso)
+            .toInstant(java.time.ZoneOffset.UTC)
+            .toEpochMilli()
+    }.getOrDefault(System.currentTimeMillis())
 
     suspend fun clear() {
         context.notificationCenterStore.edit { it.remove(key) }

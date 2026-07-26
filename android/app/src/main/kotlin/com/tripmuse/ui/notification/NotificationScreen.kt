@@ -19,9 +19,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.PersonPin
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,8 +48,8 @@ fun NotificationScreen(
 ) {
     val notifications by viewModel.notifications.collectAsState()
 
-    // 화면을 열면 안읽음 배지를 지운다
-    LaunchedEffect(Unit) { viewModel.markAllRead() }
+    // 화면을 열면 서버 알림을 최신화하고 안읽음 배지를 지운다
+    LaunchedEffect(Unit) { viewModel.onOpen() }
 
     Scaffold(
         topBar = {
@@ -88,9 +90,13 @@ fun NotificationScreen(
 private fun NotificationRow(item: AppNotification) {
     val accent = when (item.type) {
         NotificationType.FRIEND_ONLINE -> TripMuseAccents.Friend
+        NotificationType.ALBUM_MEDIA_ADDED -> TripMuseAccents.Album
+        NotificationType.ALBUM_COMMENT -> TripMuseAccents.Chat
     }
     val icon = when (item.type) {
         NotificationType.FRIEND_ONLINE -> Icons.Default.PersonPin
+        NotificationType.ALBUM_MEDIA_ADDED -> Icons.Default.PhotoLibrary
+        NotificationType.ALBUM_COMMENT -> Icons.Default.ChatBubble
     }
     Card(
         modifier = Modifier.fillMaxWidth(),

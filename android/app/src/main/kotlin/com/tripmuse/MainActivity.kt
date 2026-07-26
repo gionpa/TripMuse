@@ -54,6 +54,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var appUpdateChecker: AppUpdateChecker
 
+    @Inject
+    lateinit var notificationSyncer: com.tripmuse.data.notification.NotificationSyncer
+
     private var naverLoginCallback: ((String?) -> Unit)? = null
     private var navController: NavHostController? = null
 
@@ -74,8 +77,9 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 presenceMonitor.startHeartbeat(this)
-                // 폴링 주기를 기다리지 않고 복귀 즉시 탭 배지를 맞춘다
+                // 폴링 주기를 기다리지 않고 복귀 즉시 탭 배지와 알림을 맞춘다
                 chatUnreadMonitor.refreshNow()
+                notificationSyncer.refreshNow()
                 // 실행할 때마다 최신 버전인지 확인한다 (실패하면 조용히 넘어간다)
                 launch { appUpdateChecker.check() }
                 try {
