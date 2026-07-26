@@ -1,9 +1,12 @@
 package com.tripmuse
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -14,6 +17,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import com.navercorp.nid.NaverIdLoginSDK
@@ -23,8 +29,10 @@ import kotlinx.coroutines.launch
 import com.tripmuse.data.auth.AuthEventManager
 import com.tripmuse.data.deeplink.DeepLinkManager
 import com.tripmuse.data.presence.PresenceMonitor
+import com.tripmuse.data.update.AppUpdateChecker
 import com.tripmuse.ui.navigation.TripMuseNavHost
 import com.tripmuse.ui.theme.TripMuseTheme
+import com.tripmuse.ui.update.UpdateDialog
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -42,6 +50,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var chatUnreadMonitor: com.tripmuse.data.presence.ChatUnreadMonitor
+
+    @Inject
+    lateinit var appUpdateChecker: AppUpdateChecker
 
     private var naverLoginCallback: ((String?) -> Unit)? = null
     private var navController: NavHostController? = null
@@ -65,6 +76,8 @@ class MainActivity : ComponentActivity() {
                 presenceMonitor.startHeartbeat(this)
                 // 폴링 주기를 기다리지 않고 복귀 즉시 탭 배지를 맞춘다
                 chatUnreadMonitor.refreshNow()
+                // 실행할 때마다 최신 버전인지 확인한다 (실패하면 조용히 넘어간다)
+                launch { appUpdateChecker.check() }
                 try {
                     awaitCancellation()
                 } finally {
@@ -99,8 +112,30 @@ class MainActivity : ComponentActivity() {
                         },
                         onNavControllerReady = { navController = it }
                     )
+
+                    // 어느 화면에 있든(로그인 전 포함) 위에 뜨도록 NavHost 바깥에 둔다
+                    val pendingUpdate by appUpdateChecker.pendingUpdate.collectAsState()
+                    val scope = rememberCoroutineScope()
+                    pendingUpdate?.let { info ->
+                        UpdateDialog(
+                            info = info,
+                            currentVersionName = BuildConfig.VERSION_NAME,
+                            onUpdate = { openStore(info.downloadUrl) },
+                            onLater = { scope.launch { appUpdateChecker.snoozeCurrent() } }
+                        )
+                    }
                 }
             }
+        }
+    }
+
+    /** 스토어 또는 설정된 배포 주소를 연다. 열 수 있는 앱이 없으면 주소를 알려준다. */
+    private fun openStore(downloadUrl: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)))
+        } catch (e: ActivityNotFoundException) {
+            Log.w("AppUpdate", "스토어를 열 수 없음: $downloadUrl", e)
+            Toast.makeText(this, "$downloadUrl 에서 받아주세요", Toast.LENGTH_LONG).show()
         }
     }
 

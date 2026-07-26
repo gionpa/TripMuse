@@ -33,6 +33,8 @@ class SecurityConfig(
                     "/actuator/**",
                     "/api/v1/auth/**",
                     "/api/v1/health",
+                    // 로그인 화면에서도 버전 확인이 돌아야 해서 인증 없이 연다
+                    "/api/v1/app/version",
                     "/api/v1/admin/**",
                     "/media/files/**",
                     "/share/**",

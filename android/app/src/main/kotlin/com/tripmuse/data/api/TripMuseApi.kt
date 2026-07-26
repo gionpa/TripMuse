@@ -20,6 +20,14 @@ import retrofit2.http.Query
 
 interface TripMuseApi {
 
+    // App
+    /** 실행 시 최신 버전 확인. 로그인 전에도 호출되므로 인증이 필요 없다. */
+    @GET("app/version")
+    suspend fun getAppVersion(
+        @Query("platform") platform: String = "android",
+        @Query("versionCode") versionCode: Int
+    ): Response<AppVersionInfo>
+
     // Auth
     @POST("auth/signup")
     suspend fun signup(@Body request: SignupRequest): Response<AuthResponse>
