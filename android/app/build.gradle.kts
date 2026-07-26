@@ -67,7 +67,9 @@ android {
             isEnable = true
             reset()
             include("arm64-v8a", "x86_64")
-            isUniversalApk = false
+            // 기기별 APK와 함께, 아무 기기에나 설치되는 통합 APK도 만든다
+            // (직접 설치·배포용. Play에 올리는 AAB는 영향받지 않는다)
+            isUniversalApk = true
         }
     }
 
